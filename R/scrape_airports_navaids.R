@@ -89,9 +89,13 @@ if (current_date > latest_raw_date) {
   message("Cleaning up zip files...")
   file.remove(apt_zip_file, nav_zip_file)
 
-  # Step 8: Source and run the clean_data.R script
+  # Step 9: Source and run the clean_data.R script
   message("Running data cleaning script...")
   source("R/clean_data.R")
+
+  # Step 10: Push to Supabase
+  message("Pushing data to Supabase...")
+  source("R/push_to_supabase.R")
 
   message("Done! Data updated to ", format(current_date, "%d %b %Y"))
 } else {
