@@ -1,0 +1,23 @@
+name: Keep Supabase Active
+
+on:
+  schedule:
+    # Runs daily at 12:00 UTC
+    - cron: '0 12 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase API
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://bjmjxipflycjnrwdujxp.supabase.co/rest/v1/airports?limit=1" \
+            -H "apikey: ${{ secrets.SUPABASE_API_KEY }}")
+          echo "Response code: $response"
+          if [ "$response" -ne 200 ]; then
+            echo "Warning: API returned $response"
+            exit 1
+          fi
+          echo "Supabase is active!"
