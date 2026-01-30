@@ -230,21 +230,55 @@ delete_old_data <- function(raw_dir = "data/raw") {
 #' Checks for updates, downloads if newer, cleans data, and pushes to Supabase.
 #'
 #' @param force Logical: if TRUE, download regardless of date comparison
-#' @return Invisibly returns TRUE if data was updated, FALSE otherwise
+#' @param dry_run Logical: if TRUE, skip actual downloads and pushes
+#' @return Named list with status, counts, dates, and timing
 #' @export
-run_pipeline <- function(force = FALSE) {
+run_pipeline <- function(force = FALSE, dry_run = FALSE) {
   checkmate::assert_flag(force)
+  checkmate::assert_flag(dry_run)
+
+  start_time <- Sys.time()
+  result <- list(
+    status = "success",
+    airports_count = NA_integer_,
+    navaids_count = NA_integer_,
+    faa_eff_date = NA,
+    next_expected_date = NA,
+    error_message = NA_character_,
+    duration_seconds = NA_integer_,
+    triggered_by = if (Sys.getenv("GITHUB_ACTIONS") == "true") {
+      "scheduled"
+    } else {
+      "local"
+    }
+  )
 
   # Get local and remote dates
   local_date <- get_local_data_date("data/raw")
-  current_date <- scrape_faa_current_date()
+  faa_dates <- get_faa_dates()
+  current_date <- faa_dates$current_date
+  result$next_expected_date <- faa_dates$preview_date
 
   # Decide whether to update
   needs_update <- force || is.na(local_date) || (current_date > local_date)
 
   if (!needs_update) {
     message("Data is already up to date. No download needed.")
-    return(invisible(FALSE))
+    result$status <- "no_update"
+    result$duration_seconds <- as.integer(
+      difftime(Sys.time(), start_time, units = "secs")
+    )
+    return(result)
+  }
+
+  if (dry_run) {
+    message("DRY RUN - Would download and process data")
+    result$status <- "dry_run"
+    result$faa_eff_date <- current_date
+    result$duration_seconds <- as.integer(
+      difftime(Sys.time(), start_time, units = "secs")
+    )
+    return(result)
   }
 
   if (force) {
@@ -271,6 +305,7 @@ run_pipeline <- function(force = FALSE) {
   apt_path <- file.path(dirs$apt_dir, "APT_BASE.csv")
   airports <- clean_airports(apt_path)
   validate_cleaned_data(airports, "airports")
+  result$airports_count <- nrow(airports)
 
   # Ensure clean directory exists
   if (!dir.exists("data/clean")) {
@@ -283,6 +318,7 @@ run_pipeline <- function(force = FALSE) {
   nav_path <- file.path(dirs$nav_dir, "NAV_BASE.csv")
   navaids <- clean_navaids(nav_path)
   validate_cleaned_data(navaids, "navaids")
+  result$navaids_count <- nrow(navaids)
 
   readr::write_csv(navaids, "data/clean/navaids.csv")
   message("Wrote ", nrow(navaids), " navaids to data/clean/navaids.csv")
@@ -301,8 +337,13 @@ run_pipeline <- function(force = FALSE) {
   clear_table("navaids")
   push_to_supabase("navaids", navaids_lower)
 
+  result$faa_eff_date <- current_date
+  result$duration_seconds <- as.integer(
+    difftime(Sys.time(), start_time, units = "secs")
+  )
+
   message("Done! Data updated to ", format(current_date, "%d %b %Y"))
-  invisible(TRUE)
+  result
 }
 
 # --- Main execution (only when run directly) ---
