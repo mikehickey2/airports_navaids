@@ -107,6 +107,69 @@ scrape_faa_current_date <- function(url = faa_nasr_url) {
   current_date
 }
 
+#' Get both current and preview dates from FAA website
+#'
+#' Scrapes the FAA NASR subscription page to extract both the current
+#' effective date and the preview (next) date.
+#'
+#' @param url URL of FAA NASR subscription page
+#' @return Named list with current_date and preview_date (both Date objects)
+#' @export
+get_faa_dates <- function(url = faa_nasr_url) {
+  checkmate::assert_string(url, pattern = "^https?://")
+
+  message("Checking FAA website for subscription dates...")
+
+  page <- rvest::read_html(url)
+  page_text <- page |> rvest::html_text()
+
+  # Extract current date
+  current_match <- stringr::str_match(
+    page_text,
+    "Current[^A-Za-z]*Subscription effective ([A-Za-z]+ \\d{1,2}, \\d{4})"
+  )
+
+  if (is.na(current_match[1, 1])) {
+    rlang::abort(
+      c(
+        "Could not parse current subscription date from FAA website",
+        i = "The page format may have changed",
+        x = paste("URL:", url)
+      ),
+      class = "scrape_parse_error"
+    )
+  }
+
+  current_date <- lubridate::mdy(current_match[1, 2])
+
+  # Extract preview date
+  preview_match <- stringr::str_match(
+    page_text,
+    "Preview[^A-Za-z]*Subscription effective ([A-Za-z]+ \\d{1,2}, \\d{4})"
+  )
+
+  if (is.na(preview_match[1, 1])) {
+    rlang::abort(
+      c(
+        "Could not parse preview subscription date from FAA website",
+        i = "The page format may have changed",
+        x = paste("URL:", url)
+      ),
+      class = "scrape_parse_error"
+    )
+  }
+
+  preview_date <- lubridate::mdy(preview_match[1, 2])
+
+  message("Current FAA date: ", format(current_date, "%d %b %Y"))
+  message("Preview FAA date: ", format(preview_date, "%d %b %Y"))
+
+  list(
+    current_date = current_date,
+    preview_date = preview_date
+  )
+}
+
 #' Download and extract FAA data
 #'
 #' @param date Date object for the subscription to download
