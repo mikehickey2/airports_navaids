@@ -107,6 +107,69 @@ scrape_faa_current_date <- function(url = faa_nasr_url) {
   current_date
 }
 
+#' Get both current and preview dates from FAA website
+#'
+#' Scrapes the FAA NASR subscription page to extract both the current
+#' effective date and the preview (next) date.
+#'
+#' @param url URL of FAA NASR subscription page
+#' @return Named list with current_date and preview_date (both Date objects)
+#' @export
+get_faa_dates <- function(url = faa_nasr_url) {
+  checkmate::assert_string(url, pattern = "^https?://")
+
+  message("Checking FAA website for subscription dates...")
+
+  page <- rvest::read_html(url)
+  page_text <- page |> rvest::html_text()
+
+  # Extract current date
+  current_match <- stringr::str_match(
+    page_text,
+    "Current[^A-Za-z]*Subscription effective ([A-Za-z]+ \\d{1,2}, \\d{4})"
+  )
+
+  if (is.na(current_match[1, 1])) {
+    rlang::abort(
+      c(
+        "Could not parse current subscription date from FAA website",
+        i = "The page format may have changed",
+        x = paste("URL:", url)
+      ),
+      class = "scrape_parse_error"
+    )
+  }
+
+  current_date <- lubridate::mdy(current_match[1, 2])
+
+  # Extract preview date
+  preview_match <- stringr::str_match(
+    page_text,
+    "Preview[^A-Za-z]*Subscription effective ([A-Za-z]+ \\d{1,2}, \\d{4})"
+  )
+
+  if (is.na(preview_match[1, 1])) {
+    rlang::abort(
+      c(
+        "Could not parse preview subscription date from FAA website",
+        i = "The page format may have changed",
+        x = paste("URL:", url)
+      ),
+      class = "scrape_parse_error"
+    )
+  }
+
+  preview_date <- lubridate::mdy(preview_match[1, 2])
+
+  message("Current FAA date: ", format(current_date, "%d %b %Y"))
+  message("Preview FAA date: ", format(preview_date, "%d %b %Y"))
+
+  list(
+    current_date = current_date,
+    preview_date = preview_date
+  )
+}
+
 #' Download and extract FAA data
 #'
 #' @param date Date object for the subscription to download
@@ -167,21 +230,55 @@ delete_old_data <- function(raw_dir = "data/raw") {
 #' Checks for updates, downloads if newer, cleans data, and pushes to Supabase.
 #'
 #' @param force Logical: if TRUE, download regardless of date comparison
-#' @return Invisibly returns TRUE if data was updated, FALSE otherwise
+#' @param dry_run Logical: if TRUE, skip actual downloads and pushes
+#' @return Named list with status, counts, dates, and timing
 #' @export
-run_pipeline <- function(force = FALSE) {
+run_pipeline <- function(force = FALSE, dry_run = FALSE) {
   checkmate::assert_flag(force)
+  checkmate::assert_flag(dry_run)
+
+  start_time <- Sys.time()
+  result <- list(
+    status = "success",
+    airports_count = NA_integer_,
+    navaids_count = NA_integer_,
+    faa_eff_date = NA,
+    next_expected_date = NA,
+    error_message = NA_character_,
+    duration_seconds = NA_integer_,
+    triggered_by = if (Sys.getenv("GITHUB_ACTIONS") == "true") {
+      "scheduled"
+    } else {
+      "local"
+    }
+  )
 
   # Get local and remote dates
   local_date <- get_local_data_date("data/raw")
-  current_date <- scrape_faa_current_date()
+  faa_dates <- get_faa_dates()
+  current_date <- faa_dates$current_date
+  result$next_expected_date <- faa_dates$preview_date
 
   # Decide whether to update
   needs_update <- force || is.na(local_date) || (current_date > local_date)
 
   if (!needs_update) {
     message("Data is already up to date. No download needed.")
-    return(invisible(FALSE))
+    result$status <- "no_update"
+    result$duration_seconds <- as.integer(
+      difftime(Sys.time(), start_time, units = "secs")
+    )
+    return(result)
+  }
+
+  if (dry_run) {
+    message("DRY RUN - Would download and process data")
+    result$status <- "dry_run"
+    result$faa_eff_date <- current_date
+    result$duration_seconds <- as.integer(
+      difftime(Sys.time(), start_time, units = "secs")
+    )
+    return(result)
   }
 
   if (force) {
@@ -208,6 +305,7 @@ run_pipeline <- function(force = FALSE) {
   apt_path <- file.path(dirs$apt_dir, "APT_BASE.csv")
   airports <- clean_airports(apt_path)
   validate_cleaned_data(airports, "airports")
+  result$airports_count <- nrow(airports)
 
   # Ensure clean directory exists
   if (!dir.exists("data/clean")) {
@@ -220,6 +318,7 @@ run_pipeline <- function(force = FALSE) {
   nav_path <- file.path(dirs$nav_dir, "NAV_BASE.csv")
   navaids <- clean_navaids(nav_path)
   validate_cleaned_data(navaids, "navaids")
+  result$navaids_count <- nrow(navaids)
 
   readr::write_csv(navaids, "data/clean/navaids.csv")
   message("Wrote ", nrow(navaids), " navaids to data/clean/navaids.csv")
@@ -238,8 +337,13 @@ run_pipeline <- function(force = FALSE) {
   clear_table("navaids")
   push_to_supabase("navaids", navaids_lower)
 
+  result$faa_eff_date <- current_date
+  result$duration_seconds <- as.integer(
+    difftime(Sys.time(), start_time, units = "secs")
+  )
+
   message("Done! Data updated to ", format(current_date, "%d %b %Y"))
-  invisible(TRUE)
+  result
 }
 
 # --- Main execution (only when run directly) ---

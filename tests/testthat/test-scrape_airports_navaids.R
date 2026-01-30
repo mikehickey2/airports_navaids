@@ -140,3 +140,35 @@ test_that("run_pipeline validates force argument", {
 #   # This would be a full integration test
 #   # Requires: network access, Supabase credentials, disk space
 # })
+
+# --- Tests for get_faa_dates() ---
+
+test_that("get_faa_dates returns list with current_date and preview_date", {
+  skip_on_cran()
+  skip_if_offline()
+  skip_on_ci()
+
+  result <- get_faa_dates()
+
+  expect_type(result, "list")
+  expect_named(result, c("current_date", "preview_date"))
+  expect_s3_class(result$current_date, "Date")
+  expect_s3_class(result$preview_date, "Date")
+})
+
+test_that("get_faa_dates preview_date is after current_date", {
+  skip_on_cran()
+  skip_if_offline()
+  skip_on_ci()
+
+  result <- get_faa_dates()
+
+  expect_true(result$preview_date > result$current_date)
+})
+
+test_that("get_faa_dates validates url argument", {
+  expect_error(
+    get_faa_dates(url = "not-a-url"),
+    class = "simpleError"
+  )
+})
