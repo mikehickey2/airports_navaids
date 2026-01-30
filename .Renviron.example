@@ -1,1 +1,21 @@
+# Supabase Configuration
 SUPABASE_API_KEY=your_supabase_anon_or_service_role_key_here
+
+# Notification Settings
+# Set to "true" or "false" to enable/disable each channel
+NOTIFY_EMAIL_ENABLED=false
+NOTIFY_SMS_ENABLED=false
+
+# Contact Information
+NOTIFY_EMAIL=your_email@example.com
+NOTIFY_PHONE=+15551234567
+
+# Twilio Credentials (for SMS)
+# Get these from https://console.twilio.com/
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_FROM_NUMBER=+15559876543
+
+# SendGrid Credentials (for Email)
+# Access via Twilio Console > Email > SendGrid
+SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
