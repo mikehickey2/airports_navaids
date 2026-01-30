@@ -102,6 +102,50 @@ resp <- request("https://bjmjxipflycjnrwdujxp.supabase.co/rest/v1/airports") |>
 
 ---
 
+## Automated Updates
+
+The pipeline can run automatically via GitHub Actions.
+
+### How It Works
+
+1. **Daily check** at 12:00 UTC - scrapes FAA website for current and preview dates
+2. **Update window** - full pipeline runs when within +/-1 day of new data release
+3. **Notifications** - email and/or SMS alerts for success, failure, and reminders
+
+### Setup
+
+1. **Create accounts:**
+   - Twilio (SMS): https://www.twilio.com/try-twilio
+   - SendGrid (Email): Access via Twilio Console
+
+2. **Add GitHub Secrets** (Settings -> Secrets -> Actions):
+
+   | Secret | Description |
+   |--------|-------------|
+   | `NOTIFY_EMAIL_ENABLED` | `true` or `false` |
+   | `NOTIFY_SMS_ENABLED` | `true` or `false` |
+   | `NOTIFY_EMAIL` | Your email address |
+   | `NOTIFY_PHONE` | Your phone (+1...) |
+   | `TWILIO_ACCOUNT_SID` | From Twilio console |
+   | `TWILIO_AUTH_TOKEN` | From Twilio console |
+   | `TWILIO_FROM_NUMBER` | Your Twilio number |
+   | `SENDGRID_API_KEY` | From SendGrid |
+   | `SUPABASE_API_KEY` | Already configured |
+
+3. **Enable workflow:**
+   - Go to Actions tab -> Enable workflows
+   - Optionally trigger manually via "Run workflow"
+
+### Notification Types
+
+| Type | When | Content |
+|------|------|---------|
+| Success | Pipeline completes | Record counts, next expected date |
+| Failure | Pipeline error | Error details, link to logs |
+| Reminder | 1 day before update | "Update expected tomorrow" |
+
+---
+
 ## Data Schema
 
 ### airports
