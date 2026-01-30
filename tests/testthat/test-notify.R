@@ -132,3 +132,100 @@ test_that("send_notification respects enabled flags", {
 
   expect_true(result)
 })
+
+# --- Tests for log_to_supabase() ---
+
+test_that("log_to_supabase validates log_data argument", {
+  expect_error(
+    log_to_supabase("not a list"),
+    class = "simpleError"
+  )
+})
+
+test_that("log_to_supabase requires status field", {
+  expect_error(
+    log_to_supabase(list(airports_count = 100)),
+    class = "simpleError"
+  )
+})
+
+test_that("log_to_supabase returns TRUE in dry_run mode", {
+  withr::local_envvar(DRY_RUN = "true")
+
+  log_data <- list(
+    status = "success",
+    airports_count = 5312,
+    navaids_count = 1658,
+    faa_eff_date = as.Date("2026-02-19"),
+    next_expected_date = as.Date("2026-03-19"),
+    duration_seconds = 45,
+    triggered_by = "local"
+  )
+
+  result <- log_to_supabase(log_data)
+
+  expect_true(result)
+})
+
+# --- Tests for append_to_csv_log() ---
+
+test_that("append_to_csv_log creates file if not exists", {
+  temp_file <- withr::local_tempfile(fileext = ".csv")
+
+  log_data <- list(
+    run_timestamp = Sys.time(),
+    status = "success",
+    airports_count = 5312,
+    navaids_count = 1658,
+    faa_eff_date = as.Date("2026-02-19"),
+    next_expected_date = as.Date("2026-03-19"),
+    error_message = NA,
+    duration_seconds = 45,
+    triggered_by = "local"
+  )
+
+  result <- append_to_csv_log(log_data, csv_path = temp_file)
+
+  expect_true(result)
+  expect_true(file.exists(temp_file))
+
+  # Verify contents
+  contents <- readr::read_csv(temp_file, show_col_types = FALSE)
+  expect_equal(nrow(contents), 1)
+  expect_equal(contents$status, "success")
+})
+
+test_that("append_to_csv_log appends to existing file", {
+  temp_file <- withr::local_tempfile(fileext = ".csv")
+
+  # Create initial entry
+  log_data1 <- list(
+    run_timestamp = Sys.time() - 3600,
+    status = "success",
+    airports_count = 5310,
+    navaids_count = 1657,
+    faa_eff_date = as.Date("2026-01-22"),
+    next_expected_date = as.Date("2026-02-19"),
+    error_message = NA,
+    duration_seconds = 42,
+    triggered_by = "scheduled"
+  )
+  append_to_csv_log(log_data1, csv_path = temp_file)
+
+  # Append second entry
+  log_data2 <- list(
+    run_timestamp = Sys.time(),
+    status = "success",
+    airports_count = 5312,
+    navaids_count = 1658,
+    faa_eff_date = as.Date("2026-02-19"),
+    next_expected_date = as.Date("2026-03-19"),
+    error_message = NA,
+    duration_seconds = 45,
+    triggered_by = "scheduled"
+  )
+  append_to_csv_log(log_data2, csv_path = temp_file)
+
+  contents <- readr::read_csv(temp_file, show_col_types = FALSE)
+  expect_equal(nrow(contents), 2)
+})
