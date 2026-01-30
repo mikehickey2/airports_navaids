@@ -222,3 +222,67 @@ send_email <- function(subject, body) {
   message("Email sent successfully to ", config$email)
   TRUE
 }
+
+#' Send SMS via Twilio API
+#'
+#' @param message SMS message text (max 1600 chars)
+#' @return TRUE on success, FALSE on failure
+#' @export
+send_sms <- function(message) {
+  checkmate::assert_string(message, min.chars = 1, max.chars = 1600)
+
+  config <- get_notify_config()
+
+  if (config$dry_run) {
+    message("DRY RUN - Would send SMS:")
+    message("  To: ", config$phone)
+    message("  Message: ", substr(message, 1, 100), "...")
+    return(TRUE)
+  }
+
+  account_sid <- Sys.getenv("TWILIO_ACCOUNT_SID")
+  auth_token <- Sys.getenv("TWILIO_AUTH_TOKEN")
+  from_number <- Sys.getenv("TWILIO_FROM_NUMBER")
+
+  if (account_sid == "" || auth_token == "") {
+    rlang::warn("Twilio credentials not set, skipping SMS")
+    return(FALSE)
+  }
+
+  if (config$phone == "") {
+    rlang::warn("NOTIFY_PHONE not set, skipping SMS")
+    return(FALSE)
+  }
+
+  url <- sprintf(
+    "https://api.twilio.com/2010-04-01/Accounts/%s/Messages.json",
+    account_sid
+  )
+
+  resp <- request(url) |>
+    req_auth_basic(account_sid, auth_token) |>
+    req_body_form(
+      To = config$phone,
+      From = from_number,
+      Body = message
+    ) |>
+    req_method("POST") |>
+    req_error(is_error = function(resp) FALSE) |>
+    req_perform()
+
+  status <- resp_status(resp)
+  if (status >= 400) {
+    body <- resp_body_string(resp)
+    rlang::warn(
+      c(
+        "Failed to send SMS via Twilio",
+        x = paste("HTTP", status),
+        i = body
+      )
+    )
+    return(FALSE)
+  }
+
+  message("SMS sent successfully to ", config$phone)
+  TRUE
+}
