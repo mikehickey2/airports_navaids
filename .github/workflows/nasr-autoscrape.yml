@@ -1,0 +1,188 @@
+name: NASR Auto-Scrape
+
+on:
+  schedule:
+    # Daily at 12:00 UTC
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force download even if data is current'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  check-schedule:
+    runs-on: ubuntu-latest
+    outputs:
+      run_pipeline: ${{ steps.check.outputs.run_pipeline }}
+      send_reminder: ${{ steps.check.outputs.send_reminder }}
+      current_date: ${{ steps.check.outputs.current_date }}
+      preview_date: ${{ steps.check.outputs.preview_date }}
+    steps:
+      - name: Check FAA NASR dates
+        id: check
+        run: |
+          # Fetch FAA page and extract dates
+          PAGE=$(curl -s "https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/")
+
+          # Extract current date
+          CURRENT=$(echo "$PAGE" | grep -oP 'Current[^A-Za-z]*Subscription effective \K[A-Za-z]+ \d{1,2}, \d{4}' | head -1)
+          # Extract preview date
+          PREVIEW=$(echo "$PAGE" | grep -oP 'Preview[^A-Za-z]*Subscription effective \K[A-Za-z]+ \d{1,2}, \d{4}' | head -1)
+
+          echo "Current FAA date: $CURRENT"
+          echo "Preview FAA date: $PREVIEW"
+
+          # Convert to YYYY-MM-DD
+          CURRENT_ISO=$(date -d "$CURRENT" +%Y-%m-%d 2>/dev/null || echo "")
+          PREVIEW_ISO=$(date -d "$PREVIEW" +%Y-%m-%d 2>/dev/null || echo "")
+          TODAY=$(date +%Y-%m-%d)
+          TOMORROW=$(date -d "+1 day" +%Y-%m-%d)
+          YESTERDAY=$(date -d "-1 day" +%Y-%m-%d)
+
+          echo "current_date=$CURRENT_ISO" >> $GITHUB_OUTPUT
+          echo "preview_date=$PREVIEW_ISO" >> $GITHUB_OUTPUT
+
+          # Check if we should run pipeline (within ±1 day of preview date)
+          if [[ "$TODAY" == "$PREVIEW_ISO" ]] || [[ "$YESTERDAY" == "$PREVIEW_ISO" ]] || [[ "$TOMORROW" == "$PREVIEW_ISO" ]]; then
+            echo "run_pipeline=true" >> $GITHUB_OUTPUT
+            echo "Pipeline window is OPEN"
+          else
+            echo "run_pipeline=false" >> $GITHUB_OUTPUT
+            echo "Pipeline window is closed"
+          fi
+
+          # Check if we should send reminder (tomorrow is preview date)
+          if [[ "$TOMORROW" == "$PREVIEW_ISO" ]]; then
+            echo "send_reminder=true" >> $GITHUB_OUTPUT
+            echo "Will send reminder"
+          else
+            echo "send_reminder=false" >> $GITHUB_OUTPUT
+          fi
+
+  send-reminder:
+    needs: check-schedule
+    if: needs.check-schedule.outputs.send_reminder == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send reminder notification
+        env:
+          NOTIFY_EMAIL_ENABLED: ${{ secrets.NOTIFY_EMAIL_ENABLED }}
+          NOTIFY_SMS_ENABLED: ${{ secrets.NOTIFY_SMS_ENABLED }}
+          NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+          NOTIFY_PHONE: ${{ secrets.NOTIFY_PHONE }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          PREVIEW_DATE: ${{ needs.check-schedule.outputs.preview_date }}
+        run: |
+          SUBJECT="[FAA NASR] Update Expected Tomorrow"
+          BODY="The next FAA NASR subscription is expected tomorrow.\n\nExpected date: $PREVIEW_DATE\nPipeline will run automatically.\n\nNo action needed."
+
+          # Send email if enabled
+          if [[ "$NOTIFY_EMAIL_ENABLED" == "true" ]] && [[ -n "$SENDGRID_API_KEY" ]]; then
+            curl -X POST "https://api.sendgrid.com/v3/mail/send" \
+              -H "Authorization: Bearer $SENDGRID_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d "{\"personalizations\":[{\"to\":[{\"email\":\"$NOTIFY_EMAIL\"}]}],\"from\":{\"email\":\"noreply@faa-nasr.example.com\"},\"subject\":\"$SUBJECT\",\"content\":[{\"type\":\"text/plain\",\"value\":\"$BODY\"}]}"
+            echo "Email sent"
+          fi
+
+          # Send SMS if enabled
+          if [[ "$NOTIFY_SMS_ENABLED" == "true" ]] && [[ -n "$TWILIO_ACCOUNT_SID" ]]; then
+            curl -X POST "https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Messages.json" \
+              -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN" \
+              -d "To=$NOTIFY_PHONE" \
+              -d "From=$TWILIO_FROM_NUMBER" \
+              -d "Body=$SUBJECT - $PREVIEW_DATE"
+            echo "SMS sent"
+          fi
+
+  run-pipeline:
+    needs: check-schedule
+    if: needs.check-schedule.outputs.run_pipeline == 'true' || github.event.inputs.force == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.3'
+
+      - name: Setup renv
+        uses: r-lib/actions/setup-renv@v2
+
+      - name: Run pipeline
+        id: pipeline
+        env:
+          SUPABASE_API_KEY: ${{ secrets.SUPABASE_API_KEY }}
+          NOTIFY_EMAIL_ENABLED: ${{ secrets.NOTIFY_EMAIL_ENABLED }}
+          NOTIFY_SMS_ENABLED: ${{ secrets.NOTIFY_SMS_ENABLED }}
+          NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+          NOTIFY_PHONE: ${{ secrets.NOTIFY_PHONE }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+        run: |
+          Rscript -e "
+          source('R/scrape_airports_navaids.R')
+          source('R/notify.R')
+
+          result <- run_pipeline(force = ${{ github.event.inputs.force || 'FALSE' }})
+
+          # Log the run
+          log_pipeline_run(result)
+
+          # Send notification based on status
+          if (result\$status == 'success') {
+            send_notification('success', result)
+          } else if (result\$status == 'no_update') {
+            message('No update needed, skipping notification')
+          }
+          "
+
+      - name: Commit pipeline history
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/pipeline_history.csv
+          git diff --staged --quiet || git commit -m "data: log pipeline run $(date +%Y-%m-%d)"
+          git push
+
+      - name: Send failure notification
+        if: failure()
+        env:
+          NOTIFY_EMAIL_ENABLED: ${{ secrets.NOTIFY_EMAIL_ENABLED }}
+          NOTIFY_SMS_ENABLED: ${{ secrets.NOTIFY_SMS_ENABLED }}
+          NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+          NOTIFY_PHONE: ${{ secrets.NOTIFY_PHONE }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          SUBJECT="[FAA NASR] Pipeline Failed - Action Required"
+          BODY="The NASR update pipeline encountered an error.\n\nView logs: $GITHUB_RUN_URL\n\nThis requires manual investigation."
+
+          if [[ "$NOTIFY_EMAIL_ENABLED" == "true" ]] && [[ -n "$SENDGRID_API_KEY" ]]; then
+            curl -X POST "https://api.sendgrid.com/v3/mail/send" \
+              -H "Authorization: Bearer $SENDGRID_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d "{\"personalizations\":[{\"to\":[{\"email\":\"$NOTIFY_EMAIL\"}]}],\"from\":{\"email\":\"noreply@faa-nasr.example.com\"},\"subject\":\"$SUBJECT\",\"content\":[{\"type\":\"text/plain\",\"value\":\"$BODY\"}]}"
+          fi
+
+          if [[ "$NOTIFY_SMS_ENABLED" == "true" ]] && [[ -n "$TWILIO_ACCOUNT_SID" ]]; then
+            curl -X POST "https://api.twilio.com/2010-04-01/Accounts/$TWILIO_ACCOUNT_SID/Messages.json" \
+              -u "$TWILIO_ACCOUNT_SID:$TWILIO_AUTH_TOKEN" \
+              -d "To=$NOTIFY_PHONE" \
+              -d "From=$TWILIO_FROM_NUMBER" \
+              -d "Body=$SUBJECT - Check GitHub Actions"
+          fi
