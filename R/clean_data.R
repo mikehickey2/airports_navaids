@@ -48,7 +48,12 @@ clean_airports <- function(apt_base_path) {
 
   message("Reading airports from: ", apt_base_path)
 
-  airports_raw <- readr::read_csv(apt_base_path, show_col_types = FALSE)
+  # FAA files use ISO-8859-1 (Latin-1) encoding for special characters
+  airports_raw <- readr::read_csv(
+    apt_base_path,
+    show_col_types = FALSE,
+    locale = readr::locale(encoding = "ISO-8859-1")
+  )
 
   # Verify required columns exist
   missing_cols <- setdiff(airports_columns, names(airports_raw))
@@ -94,7 +99,12 @@ clean_navaids <- function(nav_base_path) {
 
   message("Reading navaids from: ", nav_base_path)
 
-  navaids_raw <- readr::read_csv(nav_base_path, show_col_types = FALSE)
+  # FAA files use ISO-8859-1 (Latin-1) encoding for special characters
+  navaids_raw <- readr::read_csv(
+    nav_base_path,
+    show_col_types = FALSE,
+    locale = readr::locale(encoding = "ISO-8859-1")
+  )
 
   # Verify required columns exist
   missing_cols <- setdiff(navaids_columns, names(navaids_raw))
