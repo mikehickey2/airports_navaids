@@ -286,3 +286,42 @@ send_sms <- function(message) {
   message("SMS sent successfully to ", config$phone)
   TRUE
 }
+
+#' Send notification via configured channels
+#'
+#' Formats and sends a notification via email and/or SMS based on
+#' environment configuration.
+#'
+#' @param type One of "success", "failure", "reminder", "warning"
+#' @param data Named list with data for the message
+#' @return TRUE if at least one notification sent, FALSE if none sent
+#' @export
+send_notification <- function(type, data) {
+  config <- get_notify_config()
+  msg <- format_notification(type, data)
+
+  sent_any <- FALSE
+
+  if (config$email_enabled) {
+    if (send_email(msg$subject, msg$body)) {
+      sent_any <- TRUE
+    }
+  }
+
+  if (config$sms_enabled) {
+    # SMS gets a condensed version
+    sms_text <- paste(msg$subject, "\n\n", substr(msg$body, 1, 300))
+    if (nchar(msg$body) > 300) {
+      sms_text <- paste0(sms_text, "...")
+    }
+    if (send_sms(sms_text)) {
+      sent_any <- TRUE
+    }
+  }
+
+  if (!config$email_enabled && !config$sms_enabled) {
+    message("No notification channels enabled")
+  }
+
+  sent_any
+}
