@@ -153,3 +153,72 @@ This may indicate a data issue. Please verify.",
 
   list(subject = subject, body = body)
 }
+
+#' Send email via SendGrid API
+#'
+#' @param subject Email subject line
+#' @param body Email body text
+#' @return TRUE on success, FALSE on failure
+#' @export
+send_email <- function(subject, body) {
+  checkmate::assert_string(subject, min.chars = 1)
+  checkmate::assert_string(body, min.chars = 1)
+
+  config <- get_notify_config()
+
+  if (config$dry_run) {
+    message("DRY RUN - Would send email:")
+    message("  To: ", config$email)
+    message("  Subject: ", subject)
+    message("  Body: ", substr(body, 1, 100), "...")
+    return(TRUE)
+  }
+
+  api_key <- Sys.getenv("SENDGRID_API_KEY")
+  if (api_key == "") {
+    rlang::warn("SENDGRID_API_KEY not set, skipping email")
+    return(FALSE)
+  }
+
+  if (config$email == "") {
+    rlang::warn("NOTIFY_EMAIL not set, skipping email")
+    return(FALSE)
+  }
+
+  from_email <- Sys.getenv("SENDGRID_FROM_EMAIL", unset = "noreply@example.com")
+
+  payload <- list(
+    personalizations = list(
+      list(to = list(list(email = config$email)))
+    ),
+    from = list(email = from_email),
+    subject = subject,
+    content = list(
+      list(type = "text/plain", value = body)
+    )
+  )
+
+  resp <- request("https://api.sendgrid.com/v3/mail/send") |>
+    req_headers(
+      "Authorization" = paste("Bearer", api_key),
+      "Content-Type" = "application/json"
+    ) |>
+    req_body_json(payload) |>
+    req_method("POST") |>
+    req_error(is_error = function(resp) FALSE) |>
+    req_perform()
+
+  status <- resp_status(resp)
+  if (status >= 400) {
+    rlang::warn(
+      c(
+        "Failed to send email via SendGrid",
+        x = paste("HTTP", status)
+      )
+    )
+    return(FALSE)
+  }
+
+  message("Email sent successfully to ", config$email)
+  TRUE
+}
