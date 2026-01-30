@@ -1,29 +1,82 @@
+# push_to_supabase.R
+# Functions for pushing data to Supabase via REST API
+#
+# Usage:
+#   source("R/push_to_supabase.R")
+#   push_to_supabase("airports", airports_df)
+#   clear_table("airports")
+#
+# Or run directly to push current clean data:
+#   Rscript R/push_to_supabase.R
+
 library(httr2)
 library(tidyverse)
+library(checkmate)
+library(rlang)
 
-# Load environment variables from project .Renviron if not already loaded
-if (Sys.getenv("SUPABASE_API_KEY") == "") {
-  readRenviron(".Renviron")
+# --- Configuration ---
+# Default Supabase URL (can be overridden via SUPABASE_URL env var)
+default_supabase_url <- "https://bjmjxipflycjnrwdujxp.supabase.co"
+
+#' Get Supabase configuration from environment
+#'
+#' @return Named list with url and api_key
+#' @keywords internal
+get_supabase_config <- function() {
+  # Try to load .Renviron if API key not set
+
+  if (Sys.getenv("SUPABASE_API_KEY") == "") {
+    renviron_path <- file.path(getwd(), ".Renviron")
+    if (file.exists(renviron_path)) {
+      readRenviron(renviron_path)
+    }
+  }
+
+  api_key <- Sys.getenv("SUPABASE_API_KEY")
+  if (api_key == "") {
+    rlang::abort(
+      c(
+        "Missing Supabase credentials",
+        i = "Set SUPABASE_API_KEY in .Renviron or as environment variable"
+      ),
+      class = "supabase_auth_error"
+    )
+  }
+
+  url <- Sys.getenv("SUPABASE_URL", unset = default_supabase_url)
+
+  list(url = url, api_key = api_key)
 }
 
-# Check that credentials are available
-if (Sys.getenv("SUPABASE_API_KEY") == "") {
-  stop("Missing Supabase credentials. Please set SUPABASE_API_KEY in .Renviron")
-}
+#' Push data to a Supabase table via REST API
+#'
+#' @param table_name Character string: name of the Supabase table
+#' @param data Data frame to push
+#' @param batch_size Integer: number of rows per batch (default 500, max 5000)
+#'
+#' @return Invisibly returns TRUE on success
+#' @export
+push_to_supabase <- function(table_name, data, batch_size = 500L) {
+  # --- Input validation ---
+  checkmate::assert_string(table_name, min.chars = 1)
+  checkmate::assert_data_frame(data, min.rows = 1)
+  checkmate::assert_integerish(batch_size, lower = 1, upper = 5000, len = 1)
 
-# Supabase project configuration
-supabase_url <- "https://bjmjxipflycjnrwdujxp.supabase.co"
-api_key <- Sys.getenv("SUPABASE_API_KEY")
+  batch_size <- as.integer(batch_size)
 
-# Function to upsert data to Supabase table
-push_to_supabase <- function(table_name, data, batch_size = 500) {
+  # Get configuration
+  config <- get_supabase_config()
+
   total_rows <- nrow(data)
   batches <- ceiling(total_rows / batch_size)
 
-  message("Pushing ", total_rows, " rows to '", table_name, "' in ", batches, " batches...")
+  message(
+    "Pushing ", total_rows, " rows to '", table_name,
+    "' in ", batches, " batches..."
+  )
 
   for (i in seq_len(batches)) {
-    start_idx <- (i - 1) * batch_size + 1
+    start_idx <- (i - 1L) * batch_size + 1L
     end_idx <- min(i * batch_size, total_rows)
     batch_data <- data[start_idx:end_idx, ]
 
@@ -34,10 +87,10 @@ push_to_supabase <- function(table_name, data, batch_size = 500) {
       lapply(row, function(x) if (length(x) == 0 || is.na(x)) NULL else x)
     })
 
-    resp <- request(paste0(supabase_url, "/rest/v1/", table_name)) |>
+    resp <- request(paste0(config$url, "/rest/v1/", table_name)) |>
       req_headers(
-        "apikey" = api_key,
-        "Authorization" = paste("Bearer", api_key),
+        "apikey" = config$api_key,
+        "Authorization" = paste("Bearer", config$api_key),
         "Content-Type" = "application/json",
         "Prefer" = "return=minimal"
       ) |>
@@ -47,54 +100,101 @@ push_to_supabase <- function(table_name, data, batch_size = 500) {
       req_perform()
 
     status <- resp_status(resp)
-    if (status >= 400) {
+    if (status >= 400L) {
       body <- resp_body_string(resp)
-      stop("Error pushing batch ", i, ": ", status, " - ", body)
+      rlang::abort(
+        c(
+          paste0("Failed to push batch ", i, " to '", table_name, "'"),
+          x = paste0("HTTP ", status),
+          i = body
+        ),
+        class = "supabase_push_error"
+      )
     }
 
-    message("  Batch ", i, "/", batches, " complete (rows ", start_idx, "-", end_idx, ")")
+    message(
+      "  Batch ", i, "/", batches,
+      " complete (rows ", start_idx, "-", end_idx, ")"
+    )
   }
 
   message("Successfully pushed ", total_rows, " rows to '", table_name, "'")
+  invisible(TRUE)
 }
 
-# Function to delete all rows from a table
+#' Delete all rows from a Supabase table
+#'
+#' @param table_name Character string: name of the Supabase table
+#'
+#' @return Invisibly returns TRUE on success, FALSE if table didn't exist
+#' @export
 clear_table <- function(table_name) {
+  # --- Input validation ---
+  checkmate::assert_string(table_name, min.chars = 1)
+
+  # Get configuration
+  config <- get_supabase_config()
+
   message("Clearing existing data from '", table_name, "'...")
 
-  resp <- request(paste0(supabase_url, "/rest/v1/", table_name)) |>
+  resp <- request(paste0(config$url, "/rest/v1/", table_name)) |>
     req_headers(
-      "apikey" = api_key,
-      "Authorization" = paste("Bearer", api_key),
+      "apikey" = config$api_key,
+      "Authorization" = paste("Bearer", config$api_key),
       "Prefer" = "return=minimal"
     ) |>
-    req_url_query(`id` = "gte.0") |>  # Match all rows
+    req_url_query(`id` = "gte.0") |>
     req_method("DELETE") |>
     req_error(is_error = function(resp) FALSE) |>
     req_perform()
 
   status <- resp_status(resp)
-  if (status >= 400 && status != 404) {
+  if (status >= 400L && status != 404L) {
     body <- resp_body_string(resp)
-    warning("Could not clear table (may not exist yet): ", status, " - ", body)
+    rlang::warn(
+      c(
+        paste0("Could not clear table '", table_name, "' (may not exist yet)"),
+        x = paste0("HTTP ", status),
+        i = body
+      ),
+      class = "supabase_clear_warning"
+    )
+    return(invisible(FALSE))
   }
+
+  invisible(TRUE)
 }
 
-# Read the clean data and convert column names to lowercase (to match Postgres)
-message("Reading airports data...")
-airports <- read_csv("data/clean/airports.csv", show_col_types = FALSE) |>
-  rename_with(tolower)
+#' Convert NA values to NULL in a data frame row
+#'
+#' @param row A list representing a single row
+#' @return List with NA values replaced by NULL
+#' @keywords internal
+convert_na_to_null <- function(row) {
+  lapply(row, function(x) if (length(x) == 0 || is.na(x)) NULL else x)
+}
 
-message("Reading navaids data...")
-navaids <- read_csv("data/clean/navaids.csv", show_col_types = FALSE) |>
-  rename_with(tolower)
+# --- Main execution (only when run directly) ---
+if (sys.nframe() == 0L) {
+  # Script is being run directly (not sourced)
+  message("Running push_to_supabase.R as main script...")
 
-# Clear and push airports
-clear_table("airports")
-push_to_supabase("airports", airports)
+  # Read clean data; convert column names to lowercase for Postgres
+  message("Reading airports data...")
+  airports <- read_csv("data/clean/airports.csv", show_col_types = FALSE) |>
+    rename_with(tolower)
 
-# Clear and push navaids
-clear_table("navaids")
-push_to_supabase("navaids", navaids)
+  message("Reading navaids data...")
+  navaids <- read_csv("data/clean/navaids.csv", show_col_types = FALSE) |>
+    rename_with(tolower)
 
-message("Done! Both tables pushed to Supabase.")
+  # Clear and push airports
+  clear_table("airports")
+  push_to_supabase("airports", airports)
+
+  # Clear and push navaids
+  clear_table("navaids")
+  push_to_supabase("navaids", navaids)
+
+  message("Done! Both tables pushed to Supabase.")
+}

@@ -1,4 +1,13 @@
 .DS_Store
 .Renviron
-.CLAUDE/
+.claude/
+.mcp.json
 supabase/
+temp/
+
+# renv - ignore library but keep lockfile and activate.R
+renv/library/
+renv/staging/
+renv/python/
+renv/sandbox/
+.Rprofile
