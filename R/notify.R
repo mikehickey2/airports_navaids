@@ -15,6 +15,8 @@
 library(httr2)
 library(checkmate)
 library(rlang)
+library(tibble)
+library(readr)
 
 #' Get notification configuration from environment
 #'
@@ -324,4 +326,131 @@ send_notification <- function(type, data) {
   }
 
   sent_any
+}
+
+#' Log pipeline run to Supabase
+#'
+#' @param log_data Named list with run data
+#' @return TRUE on success, FALSE on failure
+#' @export
+log_to_supabase <- function(log_data) {
+  checkmate::assert_list(log_data)
+  checkmate::assert_names(names(log_data), must.include = "status")
+
+  if (is_dry_run()) {
+    message("DRY RUN - Would log to Supabase:")
+    message("  Status: ", log_data$status)
+    message("  Airports: ", log_data$airports_count %||% "N/A")
+    message("  Navaids: ", log_data$navaids_count %||% "N/A")
+    return(TRUE)
+  }
+
+  # Load Supabase config (reuse from push_to_supabase.R)
+  api_key <- Sys.getenv("SUPABASE_API_KEY")
+  if (api_key == "") {
+    rlang::warn("SUPABASE_API_KEY not set, skipping database log")
+    return(FALSE)
+  }
+
+  supabase_url <- Sys.getenv(
+    "SUPABASE_URL",
+    unset = "https://bjmjxipflycjnrwdujxp.supabase.co"
+  )
+
+  # Prepare payload
+  payload <- list(
+    status = log_data$status,
+    airports_count = log_data$airports_count,
+    navaids_count = log_data$navaids_count,
+    faa_eff_date = format(log_data$faa_eff_date, "%Y-%m-%d"),
+    next_expected_date = format(log_data$next_expected_date, "%Y-%m-%d"),
+    error_message = log_data$error_message,
+    duration_seconds = log_data$duration_seconds,
+    triggered_by = log_data$triggered_by %||% "local"
+  )
+
+  # Remove NULL values
+  payload <- payload[!vapply(payload, is.null, logical(1))]
+
+  resp <- request(paste0(supabase_url, "/rest/v1/pipeline_logs")) |>
+    req_headers(
+      "apikey" = api_key,
+      "Authorization" = paste("Bearer", api_key),
+      "Content-Type" = "application/json",
+      "Prefer" = "return=minimal"
+    ) |>
+    req_body_json(payload) |>
+    req_method("POST") |>
+    req_error(is_error = function(resp) FALSE) |>
+    req_perform()
+
+  status <- resp_status(resp)
+  if (status >= 400) {
+    body <- resp_body_string(resp)
+    rlang::warn(
+      c(
+        "Failed to log to Supabase",
+        x = paste("HTTP", status),
+        i = body
+      )
+    )
+    return(FALSE)
+  }
+
+  message("Logged to Supabase pipeline_logs table")
+  TRUE
+}
+
+#' Append log entry to CSV file
+#'
+#' @param log_data Named list with run data
+#' @param csv_path Path to CSV file (default: data/pipeline_history.csv)
+#' @return TRUE on success
+#' @export
+append_to_csv_log <- function(log_data,
+                              csv_path = "data/pipeline_history.csv") {
+  checkmate::assert_list(log_data)
+  checkmate::assert_string(csv_path)
+
+  # Ensure run_timestamp exists
+  if (is.null(log_data$run_timestamp)) {
+    log_data$run_timestamp <- Sys.time()
+  }
+
+  # Create tibble row
+  log_row <- tibble::tibble(
+    run_timestamp = format(log_data$run_timestamp, "%Y-%m-%dT%H:%M:%SZ"),
+    status = log_data$status,
+    airports_count = log_data$airports_count %||% NA_integer_,
+    navaids_count = log_data$navaids_count %||% NA_integer_,
+    faa_eff_date = format(log_data$faa_eff_date %||% NA, "%Y-%m-%d"),
+    next_expected_date = format(
+      log_data$next_expected_date %||% NA, "%Y-%m-%d"
+    ),
+    error_message = log_data$error_message %||% NA_character_,
+    duration_seconds = log_data$duration_seconds %||% NA_integer_,
+    triggered_by = log_data$triggered_by %||% "local"
+  )
+
+  # Append to file (create if needed)
+  if (file.exists(csv_path)) {
+    readr::write_csv(log_row, csv_path, append = TRUE, col_names = FALSE)
+  } else {
+    readr::write_csv(log_row, csv_path)
+  }
+
+  message("Appended to ", csv_path)
+  TRUE
+}
+
+#' Log pipeline run to both Supabase and CSV
+#'
+#' @param log_data Named list with run data
+#' @return TRUE if at least one succeeded
+#' @export
+log_pipeline_run <- function(log_data) {
+  supabase_ok <- log_to_supabase(log_data)
+  csv_ok <- append_to_csv_log(log_data)
+
+  supabase_ok || csv_ok
 }
