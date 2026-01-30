@@ -9,10 +9,12 @@
 # Or run directly:
 #   Rscript R/scrape_airports_navaids.R
 
-library(tidyverse)
+library(dplyr)
+library(readr)
+library(purrr)
+library(stringr)
 library(lubridate)
 library(rvest)
-library(stringr)
 library(checkmate)
 library(rlang)
 
