@@ -68,6 +68,32 @@ push_to_supabase <- function(table_name, data, batch_size = 500L) {
   # Get configuration
   config <- get_supabase_config()
 
+  # Pre-push validation: check for problematic values
+  message("Validating data before push...")
+
+  # Check for parsing problems if vroom was used
+  if (!is.null(attr(data, "problems"))) {
+    probs <- attr(data, "problems")
+    if (nrow(probs) > 0) {
+      message("Warning: ", nrow(probs), " parsing problems detected")
+      print(head(probs, 10))
+    }
+  }
+
+  # Check for unexpected column types that could cause JSON issues
+  for (col in names(data)) {
+    vals <- data[[col]]
+    if (is.list(vals)) {
+      rlang::abort(
+        c(
+          paste0("Column '", col, "' is a list - cannot serialize to JSON"),
+          i = "Flatten or convert to atomic vector before push"
+        ),
+        class = "supabase_validation_error"
+      )
+    }
+  }
+
   total_rows <- nrow(data)
   batches <- ceiling(total_rows / batch_size)
 
@@ -103,11 +129,17 @@ push_to_supabase <- function(table_name, data, batch_size = 500L) {
     status <- resp_status(resp)
     if (status >= 400L) {
       body <- resp_body_string(resp)
+
+      # Debug: show sample of problematic batch
+      message("Debug: First row of failed batch:")
+      message(jsonlite::toJSON(batch_list[[1]], auto_unbox = TRUE, null = "null"))
+
       rlang::abort(
         c(
           paste0("Failed to push batch ", i, " to '", table_name, "'"),
           x = paste0("HTTP ", status),
-          i = body
+          i = paste("Supabase response:", body),
+          i = paste("Batch rows:", start_idx, "-", end_idx)
         ),
         class = "supabase_push_error"
       )
