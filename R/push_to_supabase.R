@@ -116,7 +116,14 @@ push_to_supabase <- function(table_name, data, batch_size = 500L) {
     })
 
     # Validate JSON before sending
-    json_body <- jsonlite::toJSON(batch_list, auto_unbox = TRUE, null = "null")
+    # Convert to plain character string (toJSON returns class "json")
+    json_body <- as.character(
+      jsonlite::toJSON(batch_list, auto_unbox = TRUE, null = "null")
+    )
+
+    # Ensure UTF-8 encoding
+    Encoding(json_body) <- "UTF-8"
+
     if (nchar(json_body) < 3 || json_body == "[]" || json_body == "{}") {
       rlang::abort(
         c(
@@ -130,14 +137,17 @@ push_to_supabase <- function(table_name, data, batch_size = 500L) {
 
     message("  Sending batch ", i, " (", nchar(json_body), " bytes)...")
 
+    # Convert to raw bytes for reliable transmission
+    json_raw <- charToRaw(json_body)
+
     resp <- request(paste0(config$url, "/rest/v1/", table_name)) |>
       req_headers(
         "apikey" = config$api_key,
         "Authorization" = paste("Bearer", config$api_key),
-        "Content-Type" = "application/json",
+        "Content-Type" = "application/json; charset=utf-8",
         "Prefer" = "return=minimal"
       ) |>
-      req_body_raw(json_body, type = "application/json") |>
+      req_body_raw(json_raw, type = "application/json") |>
       req_method("POST") |>
       req_error(is_error = function(resp) FALSE) |>
       req_perform()
