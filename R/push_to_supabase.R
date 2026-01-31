@@ -166,6 +166,9 @@ push_to_supabase <- function(table_name, data, batch_size = 500L) {
     )
 
     # Use req_body_raw with raw bytes to ensure exact byte transmission
+    # Add verbose output for CI debugging
+    verbose_mode <- Sys.getenv("CI") != ""
+
     resp <- request(paste0(config$url, "/rest/v1/", table_name)) |>
       req_headers(
         "apikey" = config$api_key,
@@ -175,8 +178,15 @@ push_to_supabase <- function(table_name, data, batch_size = 500L) {
       ) |>
       req_body_raw(json_bytes) |>
       req_method("POST") |>
-      req_error(is_error = function(resp) FALSE) |>
-      req_perform()
+      req_error(is_error = function(resp) FALSE)
+
+    if (verbose_mode && i == 1) {
+      message("  DEBUG: Request body type: ", class(json_bytes))
+      message("  DEBUG: First 100 bytes: ", rawToChar(json_bytes[1:100]))
+      resp <- resp |> req_options(verbose = TRUE)
+    }
+
+    resp <- req_perform(resp)
 
     status <- resp_status(resp)
     if (status >= 400L) {
