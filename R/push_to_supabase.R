@@ -78,6 +78,25 @@ push_to_supabase <- function(table_name, data, batch_size = 100L) {
   # Get configuration
   config <- get_supabase_config()
 
+  # CI DEBUG: Test with hardcoded minimal JSON first
+  if (Sys.getenv("CI") != "" && table_name == "airports") {
+    message("DEBUG: Testing connection with minimal hardcoded JSON...")
+    test_json <- '[{"eff_date":"2026-01-22","site_no":"TEST","arpt_id":"XXX"}]'
+    tmp_test <- tempfile(fileext = ".json")
+    writeLines(test_json, tmp_test)
+    message("  Test JSON: ", test_json)
+    message("  Test file size: ", file.info(tmp_test)$size, " bytes")
+
+    test_cmd <- sprintf(
+      'curl -v -X POST "%s/rest/v1/%s" -H "apikey: %s" -H "Authorization: Bearer %s" -H "Content-Type: application/json" -H "Prefer: return=minimal" --data-binary "@%s" 2>&1',
+      config$url, table_name, config$api_key, config$api_key, tmp_test
+    )
+    test_result <- system(test_cmd, intern = TRUE)
+    message("  Test result:")
+    cat(paste(test_result, collapse = "\n"), "\n")
+    unlink(tmp_test)
+  }
+
   # Pre-push validation: check for problematic values
   message("Validating data before push...")
 
