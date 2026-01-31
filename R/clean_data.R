@@ -195,7 +195,7 @@ validate_cleaned_data <- function(data,
     # Check NAV_TYPE values (warning only)
     valid_types <- c(
       "VOR", "VORTAC", "NDB", "NDB/DME", "TACAN",
-      "VOR/DME", "FAN MARKER", "VOT"
+      "VOR/DME", "FAN MARKER", "VOT", "DME", "MARINE NDB"
     )
     if (!all(data$NAV_TYPE %in% valid_types)) {
       rlang::warn(
