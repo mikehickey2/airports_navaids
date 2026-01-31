@@ -12,6 +12,7 @@
 library(httr2)
 library(dplyr)
 library(readr)
+library(jsonlite)
 library(checkmate)
 library(rlang)
 
@@ -114,6 +115,21 @@ push_to_supabase <- function(table_name, data, batch_size = 500L) {
       lapply(row, function(x) if (length(x) == 0 || is.na(x)) NULL else x)
     })
 
+    # Validate JSON before sending
+    json_body <- jsonlite::toJSON(batch_list, auto_unbox = TRUE, null = "null")
+    if (nchar(json_body) < 3 || json_body == "[]" || json_body == "{}") {
+      rlang::abort(
+        c(
+          paste0("Empty JSON body for batch ", i),
+          i = paste("Batch rows:", start_idx, "-", end_idx),
+          i = paste("JSON:", substr(json_body, 1, 200))
+        ),
+        class = "supabase_validation_error"
+      )
+    }
+
+    message("  Sending batch ", i, " (", nchar(json_body), " bytes)...")
+
     resp <- request(paste0(config$url, "/rest/v1/", table_name)) |>
       req_headers(
         "apikey" = config$api_key,
@@ -121,7 +137,7 @@ push_to_supabase <- function(table_name, data, batch_size = 500L) {
         "Content-Type" = "application/json",
         "Prefer" = "return=minimal"
       ) |>
-      req_body_json(batch_list, auto_unbox = TRUE) |>
+      req_body_raw(json_body, type = "application/json") |>
       req_method("POST") |>
       req_error(is_error = function(resp) FALSE) |>
       req_perform()
