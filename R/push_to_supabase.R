@@ -80,12 +80,21 @@ push_to_supabase <- function(table_name, data, batch_size = 100L) {
 
   # CI DEBUG: Test with hardcoded minimal JSON first
   if (Sys.getenv("CI") != "" && table_name == "airports") {
+    message("DEBUG: Checking API key...")
+    message("  API key length: ", nchar(config$api_key))
+    message("  API key starts with: ", substr(config$api_key, 1, 10), "...")
+    message("  API key ends with: ", "...", substr(config$api_key, nchar(config$api_key) - 5, nchar(config$api_key)))
+    message("  Has whitespace: ", grepl("\\s", config$api_key))
+    message("  Has newlines: ", grepl("\\n", config$api_key))
+
     message("DEBUG: Testing connection with minimal hardcoded JSON...")
     test_json <- '[{"eff_date":"2026-01-22","site_no":"TEST","arpt_id":"XXX"}]'
     tmp_test <- tempfile(fileext = ".json")
-    writeLines(test_json, tmp_test)
+    # Use cat without newline to avoid trailing newline issues
+    cat(test_json, file = tmp_test)
     message("  Test JSON: ", test_json)
     message("  Test file size: ", file.info(tmp_test)$size, " bytes")
+    message("  File contents (raw): ", readLines(tmp_test, warn = FALSE))
 
     test_cmd <- sprintf(
       'curl -v -X POST "%s/rest/v1/%s" -H "apikey: %s" -H "Authorization: Bearer %s" -H "Content-Type: application/json" -H "Prefer: return=minimal" --data-binary "@%s" 2>&1',
