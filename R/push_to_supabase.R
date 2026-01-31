@@ -58,11 +58,11 @@ get_supabase_config <- function() {
 #'
 #' @param table_name Character string: name of the Supabase table
 #' @param data Data frame to push
-#' @param batch_size Integer: number of rows per batch (default 100, max 5000)
+#' @param batch_size Integer: number of rows per batch (default 500, max 5000)
 #'
 #' @return Invisibly returns TRUE on success
 #' @export
-push_to_supabase <- function(table_name, data, batch_size = 100L) {
+push_to_supabase <- function(table_name, data, batch_size = 500L) {
   # --- Input validation ---
   checkmate::assert_string(table_name, min.chars = 1)
   checkmate::assert_data_frame(data, min.rows = 1)
@@ -70,45 +70,8 @@ push_to_supabase <- function(table_name, data, batch_size = 100L) {
 
   batch_size <- as.integer(batch_size)
 
-  # Log environment info for CI debugging
-  if (Sys.getenv("CI") != "") {
-    message("CI Environment detected")
-    message("  R version: ", R.version.string)
-    message("  Locale: ", Sys.getlocale("LC_CTYPE"))
-    message("  jsonlite version: ", packageVersion("jsonlite"))
-    message("  httr2 version: ", packageVersion("httr2"))
-  }
-
   # Get configuration
   config <- get_supabase_config()
-
-  # CI DEBUG: Test with hardcoded minimal JSON first
-  if (Sys.getenv("CI") != "" && table_name == "airports") {
-    message("DEBUG: Checking API key...")
-    message("  API key length: ", nchar(config$api_key))
-    message("  API key starts with: ", substr(config$api_key, 1, 10), "...")
-    message("  API key ends with: ", "...", substr(config$api_key, nchar(config$api_key) - 5, nchar(config$api_key)))
-    message("  Has whitespace: ", grepl("\\s", config$api_key))
-    message("  Has newlines: ", grepl("\\n", config$api_key))
-
-    message("DEBUG: Testing connection with minimal hardcoded JSON...")
-    test_json <- '[{"eff_date":"2026-01-22","site_no":"TEST","arpt_id":"XXX"}]'
-    tmp_test <- tempfile(fileext = ".json")
-    # Use cat without newline to avoid trailing newline issues
-    cat(test_json, file = tmp_test)
-    message("  Test JSON: ", test_json)
-    message("  Test file size: ", file.info(tmp_test)$size, " bytes")
-    message("  File contents (raw): ", readLines(tmp_test, warn = FALSE))
-
-    test_cmd <- sprintf(
-      'curl -v -X POST "%s/rest/v1/%s" -H "apikey: %s" -H "Authorization: Bearer %s" -H "Content-Type: application/json" -H "Prefer: return=minimal" --data-binary "@%s" 2>&1',
-      config$url, table_name, config$api_key, config$api_key, tmp_test
-    )
-    test_result <- system(test_cmd, intern = TRUE)
-    message("  Test result:")
-    cat(paste(test_result, collapse = "\n"), "\n")
-    unlink(tmp_test)
-  }
 
   # Pre-push validation: check for problematic values
   message("Validating data before push...")
@@ -203,17 +166,15 @@ push_to_supabase <- function(table_name, data, batch_size = 100L) {
     on.exit(unlink(tmp_file), add = TRUE)
     writeBin(json_bytes, tmp_file)
 
-    verbose_mode <- Sys.getenv("CI") != ""
-
-    if (verbose_mode && i == 1) {
-      message("  DEBUG: Using system curl")
-      message("  DEBUG: Temp file size: ", file.info(tmp_file)$size, " bytes")
-      message("  DEBUG: First 100 bytes: ", rawToChar(json_bytes[1:100]))
-    }
-
-    curl_cmd <- sprintf(
-      'curl -s -w "\\n%%{http_code}" -X POST "%s/rest/v1/%s" -H "apikey: %s" -H "Authorization: Bearer %s" -H "Content-Type: application/json" -H "Prefer: return=minimal" --data-binary "@%s"',
-      config$url, table_name, config$api_key, config$api_key, tmp_file
+    # Build curl command using paste0 to handle line length
+    api_url <- paste0(config$url, "/rest/v1/", table_name)
+    curl_cmd <- paste0(
+      'curl -s -w "\\n%{http_code}" -X POST "', api_url, '" ',
+      '-H "apikey: ', config$api_key, '" ',
+      '-H "Authorization: Bearer ', config$api_key, '" ',
+      '-H "Content-Type: application/json" ',
+      '-H "Prefer: return=minimal" ',
+      '--data-binary "@', tmp_file, '"'
     )
 
     curl_result <- system(curl_cmd, intern = TRUE)
