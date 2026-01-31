@@ -66,6 +66,15 @@ push_to_supabase <- function(table_name, data, batch_size = 500L) {
 
   batch_size <- as.integer(batch_size)
 
+  # Log environment info for CI debugging
+  if (Sys.getenv("CI") != "") {
+    message("CI Environment detected")
+    message("  R version: ", R.version.string)
+    message("  Locale: ", Sys.getlocale("LC_CTYPE"))
+    message("  jsonlite version: ", packageVersion("jsonlite"))
+    message("  httr2 version: ", packageVersion("httr2"))
+  }
+
   # Get configuration
   config <- get_supabase_config()
 
@@ -128,20 +137,36 @@ push_to_supabase <- function(table_name, data, batch_size = 500L) {
       )
     }
 
-    # Pre-validate JSON serialization
-    test_json <- jsonlite::toJSON(batch_list, auto_unbox = TRUE)
+    # Serialize JSON explicitly - we control exactly what's sent
+    # Using null = "null" ensures NULL values serialize properly
+    json_body <- jsonlite::toJSON(batch_list, auto_unbox = TRUE, null = "null")
+
+    # Validate serialization succeeded
+    if (nchar(json_body) < 3) {
+      rlang::abort(
+        c(
+          paste0("JSON serialization produced invalid output for batch ", i),
+          x = paste0("JSON length: ", nchar(json_body)),
+          i = paste("Batch rows:", start_idx, "-", end_idx)
+        ),
+        class = "supabase_validation_error"
+      )
+    }
+
     message(
       "  Sending batch ", i, " (", length(batch_list), " rows, ",
-      nchar(test_json), " JSON bytes)..."
+      nchar(json_body), " JSON bytes)..."
     )
 
+    # Use req_body_raw with pre-serialized JSON to bypass httr2's internal
+    # serialization and ensure consistent behavior across environments
     resp <- request(paste0(config$url, "/rest/v1/", table_name)) |>
       req_headers(
         "apikey" = config$api_key,
         "Authorization" = paste("Bearer", config$api_key),
         "Prefer" = "return=minimal"
       ) |>
-      req_body_json(batch_list, auto_unbox = TRUE) |>
+      req_body_raw(json_body, type = "application/json") |>
       req_method("POST") |>
       req_error(is_error = function(resp) FALSE) |>
       req_perform()
@@ -152,7 +177,10 @@ push_to_supabase <- function(table_name, data, batch_size = 500L) {
 
       # Debug: show sample of problematic batch
       message("Debug: First row of failed batch:")
-      message(jsonlite::toJSON(batch_list[[1]], auto_unbox = TRUE, null = "null"))
+      first_row_json <- jsonlite::toJSON(
+        batch_list[[1]], auto_unbox = TRUE, null = "null"
+      )
+      message(first_row_json)
 
       rlang::abort(
         c(
