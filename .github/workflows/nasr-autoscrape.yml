@@ -143,11 +143,18 @@ jobs:
           TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
           SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
         run: |
+          # Convert GitHub boolean to R boolean
+          if [[ "${{ github.event.inputs.force }}" == "true" ]]; then
+            FORCE_FLAG="TRUE"
+          else
+            FORCE_FLAG="FALSE"
+          fi
+
           Rscript -e "
           source('R/scrape_airports_navaids.R')
           source('R/notify.R')
 
-          result <- run_pipeline(force = ${{ github.event.inputs.force || 'FALSE' }})
+          result <- run_pipeline(force = ${FORCE_FLAG})
 
           # Log the run
           log_pipeline_run(result)
