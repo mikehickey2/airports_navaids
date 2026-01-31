@@ -72,13 +72,15 @@ push_to_supabase <- function(table_name, data, batch_size = 500L) {
   # Pre-push validation: check for problematic values
   message("Validating data before push...")
 
-  # Check for parsing problems if vroom was used
-  if (!is.null(attr(data, "problems"))) {
-    probs <- attr(data, "problems")
-    if (nrow(probs) > 0) {
-      message("Warning: ", nrow(probs), " parsing problems detected")
-      print(head(probs, 10))
-    }
+  # Debug: show data info
+  message("Data dimensions: ", nrow(data), " rows x ", ncol(data), " cols")
+  message("Column names: ", paste(names(data), collapse = ", "))
+
+  # Check for parsing problems if vroom/readr was used
+  probs <- attr(data, "problems")
+  if (!is.null(probs) && is.data.frame(probs) && nrow(probs) > 0) {
+    message("Warning: ", nrow(probs), " parsing problems detected")
+    print(head(probs, 10))
   }
 
   # Check for unexpected column types that could cause JSON issues
@@ -126,7 +128,12 @@ push_to_supabase <- function(table_name, data, batch_size = 500L) {
       )
     }
 
-    message("  Sending batch ", i, " (", length(batch_list), " rows)...")
+    # Pre-validate JSON serialization
+    test_json <- jsonlite::toJSON(batch_list, auto_unbox = TRUE)
+    message(
+      "  Sending batch ", i, " (", length(batch_list), " rows, ",
+      nchar(test_json), " JSON bytes)..."
+    )
 
     resp <- request(paste0(config$url, "/rest/v1/", table_name)) |>
       req_headers(
