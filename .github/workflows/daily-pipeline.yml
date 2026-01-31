@@ -1,0 +1,119 @@
+name: Daily FAA Data Pipeline
+
+on:
+  schedule:
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force download even if data is current'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  check-and-run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check FAA dates
+        id: check
+        run: |
+          echo "Checking FAA NASR subscription dates..."
+
+          PAGE=$(curl -s "https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/")
+
+          CURRENT=$(echo "$PAGE" | grep -oP 'Current[^A-Za-z]*Subscription effective \K[A-Za-z]+ \d{1,2}, \d{4}' | head -1)
+          PREVIEW=$(echo "$PAGE" | grep -oP 'Preview[^A-Za-z]*Subscription effective \K[A-Za-z]+ \d{1,2}, \d{4}' | head -1)
+
+          if [[ -z "$CURRENT" ]]; then
+            echo "::error::Could not parse current date from FAA website"
+            exit 1
+          fi
+
+          CURRENT_ISO=$(date -d "$CURRENT" +%Y-%m-%d)
+          PREVIEW_ISO=$(date -d "$PREVIEW" +%Y-%m-%d 2>/dev/null || echo "unknown")
+          TODAY=$(date +%Y-%m-%d)
+
+          echo "Current FAA date: $CURRENT ($CURRENT_ISO)"
+          echo "Preview FAA date: $PREVIEW ($PREVIEW_ISO)"
+          echo "Today: $TODAY"
+
+          echo "current_date=$CURRENT_ISO" >> $GITHUB_OUTPUT
+          echo "preview_date=$PREVIEW_ISO" >> $GITHUB_OUTPUT
+
+          # Check if today matches the current FAA date (new data just released)
+          if [[ "$TODAY" == "$CURRENT_ISO" ]]; then
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+            echo "New data released today - pipeline will run"
+          else
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "No new data today"
+          fi
+
+      - name: Write status summary
+        run: |
+          echo "## FAA NASR Data Check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Current FAA Date | ${{ steps.check.outputs.current_date }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Preview FAA Date | ${{ steps.check.outputs.preview_date }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Needs Update | ${{ steps.check.outputs.needs_update }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Force Flag | ${{ github.event.inputs.force }} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Checkout repository
+        if: steps.check.outputs.needs_update == 'true' || github.event.inputs.force == 'true'
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        if: steps.check.outputs.needs_update == 'true' || github.event.inputs.force == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libcurl4-openssl-dev \
+            libfontconfig1-dev \
+            libfreetype6-dev \
+            libx11-dev \
+            pandoc
+
+      - name: Setup R
+        if: steps.check.outputs.needs_update == 'true' || github.event.inputs.force == 'true'
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.5'
+
+      - name: Setup renv
+        if: steps.check.outputs.needs_update == 'true' || github.event.inputs.force == 'true'
+        uses: r-lib/actions/setup-renv@v2
+        env:
+          RENV_CONFIG_REPOS_OVERRIDE: 'https://packagemanager.posit.co/cran/__linux__/noble/latest'
+
+      - name: Run pipeline
+        if: steps.check.outputs.needs_update == 'true' || github.event.inputs.force == 'true'
+        id: pipeline
+        env:
+          SUPABASE_API_KEY: ${{ secrets.SUPABASE_API_KEY }}
+        run: |
+          FORCE_FLAG="${{ github.event.inputs.force == 'true' && 'TRUE' || 'FALSE' }}"
+
+          Rscript -e "
+          source('R/scrape_airports_navaids.R')
+          result <- run_pipeline(force = ${FORCE_FLAG})
+
+          # Write outputs for summary
+          cat('airports_count=', result\$airports_count, '\n', sep = '', file = Sys.getenv('GITHUB_OUTPUT'), append = TRUE)
+          cat('navaids_count=', result\$navaids_count, '\n', sep = '', file = Sys.getenv('GITHUB_OUTPUT'), append = TRUE)
+          cat('status=', result\$status, '\n', sep = '', file = Sys.getenv('GITHUB_OUTPUT'), append = TRUE)
+          "
+
+      - name: Write pipeline results
+        if: steps.check.outputs.needs_update == 'true' || github.event.inputs.force == 'true'
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Pipeline Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ${{ steps.pipeline.outputs.status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Airports | ${{ steps.pipeline.outputs.airports_count }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Navaids | ${{ steps.pipeline.outputs.navaids_count }} |" >> $GITHUB_STEP_SUMMARY
