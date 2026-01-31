@@ -178,7 +178,9 @@ push_to_supabase <- function(table_name, data, batch_size = 500L) {
       ) |>
       req_body_raw(json_bytes) |>
       req_method("POST") |>
-      req_error(is_error = function(resp) FALSE)
+      req_error(is_error = function(resp) FALSE) |>
+      # Force fresh connection - don't reuse from clear_table DELETE
+      req_options(forbid_reuse = TRUE, fresh_connect = TRUE)
 
     if (verbose_mode && i == 1) {
       message("  DEBUG: Request body type: ", class(json_bytes))
