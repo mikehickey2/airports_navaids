@@ -10,9 +10,7 @@
 #   Rscript R/push_to_supabase.R
 
 library(httr2)
-library(dplyr)
-library(readr)
-library(jsonlite)
+library(tidyverse)
 library(checkmate)
 library(rlang)
 
@@ -35,10 +33,6 @@ get_supabase_config <- function() {
   }
 
   api_key <- Sys.getenv("SUPABASE_API_KEY")
-  # Trim whitespace and newlines that may be added by CI secrets handling
-  api_key <- trimws(api_key)
-  api_key <- gsub("[\r\n]", "", api_key)
-
   if (api_key == "") {
     rlang::abort(
       c(
@@ -73,34 +67,6 @@ push_to_supabase <- function(table_name, data, batch_size = 500L) {
   # Get configuration
   config <- get_supabase_config()
 
-  # Pre-push validation: check for problematic values
-  message("Validating data before push...")
-
-  # Debug: show data info
-  message("Data dimensions: ", nrow(data), " rows x ", ncol(data), " cols")
-  message("Column names: ", paste(names(data), collapse = ", "))
-
-  # Check for parsing problems if vroom/readr was used
-  probs <- attr(data, "problems")
-  if (!is.null(probs) && is.data.frame(probs) && nrow(probs) > 0) {
-    message("Warning: ", nrow(probs), " parsing problems detected")
-    print(head(probs, 10))
-  }
-
-  # Check for unexpected column types that could cause JSON issues
-  for (col in names(data)) {
-    vals <- data[[col]]
-    if (is.list(vals)) {
-      rlang::abort(
-        c(
-          paste0("Column '", col, "' is a list - cannot serialize to JSON"),
-          i = "Flatten or convert to atomic vector before push"
-        ),
-        class = "supabase_validation_error"
-      )
-    }
-  }
-
   total_rows <- nrow(data)
   batches <- ceiling(total_rows / batch_size)
 
@@ -121,83 +87,26 @@ push_to_supabase <- function(table_name, data, batch_size = 500L) {
       lapply(row, function(x) if (length(x) == 0 || is.na(x)) NULL else x)
     })
 
-    # Validate batch is not empty
-    if (length(batch_list) == 0) {
-      rlang::abort(
-        c(
-          paste0("Empty batch ", i),
-          i = paste("Batch rows:", start_idx, "-", end_idx)
-        ),
-        class = "supabase_validation_error"
-      )
-    }
+    resp <- request(paste0(config$url, "/rest/v1/", table_name)) |>
+      req_headers(
+        "apikey" = config$api_key,
+        "Authorization" = paste("Bearer", config$api_key),
+        "Content-Type" = "application/json",
+        "Prefer" = "return=minimal"
+      ) |>
+      req_body_json(batch_list, auto_unbox = TRUE) |>
+      req_method("POST") |>
+      req_error(is_error = function(resp) FALSE) |>
+      req_perform()
 
-    # Serialize JSON explicitly - we control exactly what's sent
-    # Using null = "null" ensures NULL values serialize properly
-    json_body <- jsonlite::toJSON(batch_list, auto_unbox = TRUE, null = "null")
-
-    # Validate serialization succeeded
-    if (nchar(json_body) < 3) {
-      rlang::abort(
-        c(
-          paste0("JSON serialization produced invalid output for batch ", i),
-          x = paste0("JSON length: ", nchar(json_body)),
-          i = paste("Batch rows:", start_idx, "-", end_idx)
-        ),
-        class = "supabase_validation_error"
-      )
-    }
-
-    # Convert to plain character and ensure UTF-8 encoding
-    json_str <- as.character(json_body)
-    Encoding(json_str) <- "UTF-8"
-
-    # Convert to raw bytes for transmission
-    json_bytes <- charToRaw(json_str)
-
-    message(
-      "  Sending batch ", i, " (", length(batch_list), " rows, ",
-      length(json_bytes), " bytes)..."
-    )
-
-    # Try using system curl to bypass httr2 entirely
-    # Write JSON to temp file and use curl --data-binary
-    tmp_file <- tempfile(fileext = ".json")
-    on.exit(unlink(tmp_file), add = TRUE)
-    writeBin(json_bytes, tmp_file)
-
-    # Build curl command using paste0 to handle line length
-    api_url <- paste0(config$url, "/rest/v1/", table_name)
-    curl_cmd <- paste0(
-      'curl -s -w "\\n%{http_code}" -X POST "', api_url, '" ',
-      '-H "apikey: ', config$api_key, '" ',
-      '-H "Authorization: Bearer ', config$api_key, '" ',
-      '-H "Content-Type: application/json" ',
-      '-H "Prefer: return=minimal" ',
-      '--data-binary "@', tmp_file, '"'
-    )
-
-    curl_result <- system(curl_cmd, intern = TRUE)
-
-    # Last line is the HTTP status code
-    status <- as.integer(tail(curl_result, 1))
-    body <- paste(head(curl_result, -1), collapse = "\n")
-
+    status <- resp_status(resp)
     if (status >= 400L) {
-
-      # Debug: show sample of problematic batch
-      message("Debug: First row of failed batch:")
-      first_row_json <- jsonlite::toJSON(
-        batch_list[[1]], auto_unbox = TRUE, null = "null"
-      )
-      message(first_row_json)
-
+      body <- resp_body_string(resp)
       rlang::abort(
         c(
           paste0("Failed to push batch ", i, " to '", table_name, "'"),
           x = paste0("HTTP ", status),
-          i = paste("Supabase response:", body),
-          i = paste("Batch rows:", start_idx, "-", end_idx)
+          i = body
         ),
         class = "supabase_push_error"
       )

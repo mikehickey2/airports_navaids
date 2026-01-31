@@ -9,10 +9,10 @@
 # Or run directly to clean current raw data:
 #   Rscript R/clean_data.R
 
-library(dplyr)
-library(readr)
+library(tidyverse)
 library(checkmate)
 library(rlang)
+library(assertr)
 
 # --- Column definitions ---
 # Expected columns for airports table (per docs/data_validation.md)
@@ -195,7 +195,7 @@ validate_cleaned_data <- function(data,
     # Check NAV_TYPE values (warning only)
     valid_types <- c(
       "VOR", "VORTAC", "NDB", "NDB/DME", "TACAN",
-      "VOR/DME", "FAN MARKER", "VOT", "DME", "MARINE NDB"
+      "VOR/DME", "FAN MARKER", "VOT"
     )
     if (!all(data$NAV_TYPE %in% valid_types)) {
       rlang::warn(
