@@ -54,11 +54,11 @@ get_supabase_config <- function() {
 #'
 #' @param table_name Character string: name of the Supabase table
 #' @param data Data frame to push
-#' @param batch_size Integer: number of rows per batch (default 500, max 5000)
+#' @param batch_size Integer: number of rows per batch (default 100, max 5000)
 #'
 #' @return Invisibly returns TRUE on success
 #' @export
-push_to_supabase <- function(table_name, data, batch_size = 500L) {
+push_to_supabase <- function(table_name, data, batch_size = 100L) {
   # --- Input validation ---
   checkmate::assert_string(table_name, min.chars = 1)
   checkmate::assert_data_frame(data, min.rows = 1)
