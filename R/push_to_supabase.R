@@ -165,34 +165,32 @@ push_to_supabase <- function(table_name, data, batch_size = 100L) {
       length(json_bytes), " bytes)..."
     )
 
-    # Use req_body_raw with raw bytes to ensure exact byte transmission
-    # Add verbose output for CI debugging
+    # Try using system curl to bypass httr2 entirely
+    # Write JSON to temp file and use curl --data-binary
+    tmp_file <- tempfile(fileext = ".json")
+    on.exit(unlink(tmp_file), add = TRUE)
+    writeBin(json_bytes, tmp_file)
+
     verbose_mode <- Sys.getenv("CI") != ""
 
-    resp <- request(paste0(config$url, "/rest/v1/", table_name)) |>
-      req_headers(
-        "apikey" = config$api_key,
-        "Authorization" = paste("Bearer", config$api_key),
-        "Content-Type" = "application/json",
-        "Prefer" = "return=minimal"
-      ) |>
-      req_body_raw(json_bytes) |>
-      req_method("POST") |>
-      req_error(is_error = function(resp) FALSE) |>
-      # Force fresh connection - don't reuse from clear_table DELETE
-      req_options(forbid_reuse = TRUE, fresh_connect = TRUE)
-
     if (verbose_mode && i == 1) {
-      message("  DEBUG: Request body type: ", class(json_bytes))
+      message("  DEBUG: Using system curl")
+      message("  DEBUG: Temp file size: ", file.info(tmp_file)$size, " bytes")
       message("  DEBUG: First 100 bytes: ", rawToChar(json_bytes[1:100]))
-      resp <- resp |> req_options(verbose = TRUE)
     }
 
-    resp <- req_perform(resp)
+    curl_cmd <- sprintf(
+      'curl -s -w "\\n%%{http_code}" -X POST "%s/rest/v1/%s" -H "apikey: %s" -H "Authorization: Bearer %s" -H "Content-Type: application/json" -H "Prefer: return=minimal" --data-binary "@%s"',
+      config$url, table_name, config$api_key, config$api_key, tmp_file
+    )
 
-    status <- resp_status(resp)
+    curl_result <- system(curl_cmd, intern = TRUE)
+
+    # Last line is the HTTP status code
+    status <- as.integer(tail(curl_result, 1))
+    body <- paste(head(curl_result, -1), collapse = "\n")
+
     if (status >= 400L) {
-      body <- resp_body_string(resp)
 
       # Debug: show sample of problematic batch
       message("Debug: First row of failed batch:")
