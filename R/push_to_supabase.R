@@ -35,6 +35,10 @@ get_supabase_config <- function() {
   }
 
   api_key <- Sys.getenv("SUPABASE_API_KEY")
+  # Trim whitespace and newlines that may be added by CI secrets handling
+  api_key <- trimws(api_key)
+  api_key <- gsub("[\r\n]", "", api_key)
+
   if (api_key == "") {
     rlang::abort(
       c(
