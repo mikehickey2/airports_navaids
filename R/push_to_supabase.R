@@ -153,20 +153,27 @@ push_to_supabase <- function(table_name, data, batch_size = 500L) {
       )
     }
 
+    # Convert to plain character and ensure UTF-8 encoding
+    json_str <- as.character(json_body)
+    Encoding(json_str) <- "UTF-8"
+
+    # Convert to raw bytes for transmission
+    json_bytes <- charToRaw(json_str)
+
     message(
       "  Sending batch ", i, " (", length(batch_list), " rows, ",
-      nchar(json_body), " JSON bytes)..."
+      length(json_bytes), " bytes)..."
     )
 
-    # Use req_body_raw with pre-serialized JSON to bypass httr2's internal
-    # serialization and ensure consistent behavior across environments
+    # Use req_body_raw with raw bytes to ensure exact byte transmission
     resp <- request(paste0(config$url, "/rest/v1/", table_name)) |>
       req_headers(
         "apikey" = config$api_key,
         "Authorization" = paste("Bearer", config$api_key),
+        "Content-Type" = "application/json",
         "Prefer" = "return=minimal"
       ) |>
-      req_body_raw(json_body, type = "application/json") |>
+      req_body_raw(json_bytes) |>
       req_method("POST") |>
       req_error(is_error = function(resp) FALSE) |>
       req_perform()
