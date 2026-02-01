@@ -22,11 +22,15 @@ jobs:
 
           PAGE=$(curl -s "https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/")
 
-          CURRENT=$(echo "$PAGE" | grep -oP 'Current[^A-Za-z]*Subscription effective \K[A-Za-z]+ \d{1,2}, \d{4}' | head -1)
-          PREVIEW=$(echo "$PAGE" | grep -oP 'Preview[^A-Za-z]*Subscription effective \K[A-Za-z]+ \d{1,2}, \d{4}' | head -1)
+          # FAA page structure: <h2>Current</h2> followed by <li>...Subscription effective DATE
+          # Extract the first "Subscription effective" date after "Current" heading
+          CURRENT=$(echo "$PAGE" | grep -A5 '<h2>Current</h2>' | grep -oP 'Subscription effective \K[A-Za-z]+ \d{1,2}, \d{4}' | head -1)
+          PREVIEW=$(echo "$PAGE" | grep -A5 '<h2>Preview</h2>' | grep -oP 'Subscription effective \K[A-Za-z]+ \d{1,2}, \d{4}' | head -1)
 
           if [[ -z "$CURRENT" ]]; then
             echo "::error::Could not parse current date from FAA website"
+            echo "Debug: Page content around Current heading:"
+            echo "$PAGE" | grep -A10 -i "current" | head -15
             exit 1
           fi
 
