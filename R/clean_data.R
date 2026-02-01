@@ -9,7 +9,8 @@
 # Or run directly to clean current raw data:
 #   Rscript R/clean_data.R
 
-library(tidyverse)
+library(dplyr)
+library(readr)
 library(checkmate)
 library(rlang)
 library(assertr)

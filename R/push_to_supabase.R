@@ -10,7 +10,8 @@
 #   Rscript R/push_to_supabase.R
 
 library(httr2)
-library(tidyverse)
+library(dplyr)
+library(readr)
 library(checkmate)
 library(rlang)
 
