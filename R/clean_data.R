@@ -194,13 +194,18 @@ validate_cleaned_data <- function(data,
     }
 
     # Check NAV_TYPE values (warning only)
+    # FAA NAV_TYPE values per NAV DATA LAYOUT.pdf
     valid_types <- c(
-      "VOR", "VORTAC", "NDB", "NDB/DME", "TACAN",
-      "VOR/DME", "FAN MARKER", "VOT"
+      "CONSOLAN", "DME", "FAN MARKER", "MARINE NDB", "MARINE NDB/DME",
+      "NDB", "NDB/DME", "TACAN", "UHF/NDB", "VOR", "VOR/DME", "VORTAC", "VOT"
     )
-    if (!all(data$NAV_TYPE %in% valid_types)) {
+    invalid_types <- setdiff(unique(data$NAV_TYPE), valid_types)
+    if (length(invalid_types) > 0) {
       rlang::warn(
-        "Some NAV_TYPE values are unexpected",
+        c(
+          "Unexpected NAV_TYPE values found",
+          i = paste("Unknown types:", paste(invalid_types, collapse = ", "))
+        ),
         class = "validation_warning"
       )
     }
