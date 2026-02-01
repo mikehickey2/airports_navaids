@@ -3,8 +3,8 @@
 Airports and Navaids on Supabase with API Access
 
 **Status:** Active
-**Version:** 1.0
-**Date:** 2025-12-20
+**Version:** 1.1
+**Date:** 2026-01-31
 **Author:** Mike
 **Primary Data Source:** [FAA NASR 28-Day Subscription](https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/)
 
@@ -15,16 +15,17 @@ Airports and Navaids on Supabase with API Access
 This project provides a reusable backend platform that ingests publicly available FAA aeronautical reference data (airports and navaids), stores it in a Supabase-hosted Postgres database, and exposes it via a REST API. The platform supports multiple downstream projects requiring authoritative lookup of identifiers and coordinates.
 
 **Current Data:**
-- 5,310 airports
-- 1,657 navaids
+- 5,308 airports
+- 1,650 navaids
 
 ---
 
 ## Quick Start
 
 ### Prerequisites
-- R 4.x with packages: `tidyverse`, `lubridate`, `rvest`, `httr2`
+- R 4.x with packages: `dplyr`, `readr`, `purrr`, `stringr`, `lubridate`, `rvest`, `httr2`, `checkmate`, `rlang`
 - Supabase account with API key
+- renv for dependency management
 
 ### Setup
 
@@ -104,45 +105,31 @@ resp <- request("https://bjmjxipflycjnrwdujxp.supabase.co/rest/v1/airports") |>
 
 ## Automated Updates
 
-The pipeline can run automatically via GitHub Actions.
+The pipeline runs automatically via GitHub Actions.
 
 ### How It Works
 
-1. **Daily check** at 12:00 UTC - scrapes FAA website for current and preview dates
-2. **Update window** - full pipeline runs when within +/-1 day of new data release
-3. **Notifications** - email and/or SMS alerts for success, failure, and reminders
+1. **Daily check** at 12:00 UTC - scrapes FAA website for current subscription date
+2. **Conditional execution** - full pipeline runs only when new data is available
+3. **Results** - written to GitHub Actions job summary (visible in workflow run page)
 
 ### Setup
 
-1. **Create accounts:**
-   - Twilio (SMS): https://www.twilio.com/try-twilio
-   - SendGrid (Email): Access via Twilio Console
-
-2. **Add GitHub Secrets** (Settings -> Secrets -> Actions):
+1. **Add GitHub Secret** (Settings -> Secrets -> Actions):
 
    | Secret | Description |
    |--------|-------------|
-   | `NOTIFY_EMAIL_ENABLED` | `true` or `false` |
-   | `NOTIFY_SMS_ENABLED` | `true` or `false` |
-   | `NOTIFY_EMAIL` | Your email address |
-   | `NOTIFY_PHONE` | Your phone (+1...) |
-   | `TWILIO_ACCOUNT_SID` | From Twilio console |
-   | `TWILIO_AUTH_TOKEN` | From Twilio console |
-   | `TWILIO_FROM_NUMBER` | Your Twilio number |
-   | `SENDGRID_API_KEY` | From SendGrid |
-   | `SUPABASE_API_KEY` | Already configured |
+   | `SUPABASE_API_KEY` | Your Supabase anon or service_role key |
 
-3. **Enable workflow:**
+2. **Enable workflow:**
    - Go to Actions tab -> Enable workflows
-   - Optionally trigger manually via "Run workflow"
+   - Optionally trigger manually via "Run workflow" with force option
 
-### Notification Types
+### Notifications
 
-| Type | When | Content |
-|------|------|---------|
-| Success | Pipeline completes | Record counts, next expected date |
-| Failure | Pipeline error | Error details, link to logs |
-| Reminder | 1 day before update | "Update expected tomorrow" |
+GitHub Actions handles notifications natively:
+- Configure in Settings -> Notifications to receive email/mobile alerts on workflow failure
+- Job summary shows airports/navaids counts after successful runs
 
 ---
 
@@ -188,4 +175,3 @@ The pipeline can run automatically via GitHub Actions.
 - Add database indexes for frequently queried columns
 - Create R/Python client packages
 - Add additional FAA data types (airways, fixes, procedures)
-- Scheduled automation via cron or GitHub Actions
