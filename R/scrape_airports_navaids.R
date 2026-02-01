@@ -170,10 +170,16 @@ delete_old_data <- function(raw_dir = "data/raw") {
 #' Checks for updates, downloads if newer, cleans data, and pushes to Supabase.
 #'
 #' @param force Logical: if TRUE, download regardless of date comparison
-#' @return Invisibly returns TRUE if data was updated, FALSE otherwise
+#' @return List with status, airports_count, navaids_count
 #' @export
 run_pipeline <- function(force = FALSE) {
   checkmate::assert_flag(force)
+
+  result <- list(
+    status = "success",
+    airports_count = NA_integer_,
+    navaids_count = NA_integer_
+  )
 
   # Get local and remote dates
   local_date <- get_local_data_date("data/raw")
@@ -184,7 +190,8 @@ run_pipeline <- function(force = FALSE) {
 
   if (!needs_update) {
     message("Data is already up to date. No download needed.")
-    return(invisible(FALSE))
+    result$status <- "no_update"
+    return(result)
   }
 
   if (force) {
@@ -219,6 +226,7 @@ run_pipeline <- function(force = FALSE) {
 
   readr::write_csv(airports, "data/clean/airports.csv")
   message("Wrote ", nrow(airports), " airports to data/clean/airports.csv")
+  result$airports_count <- nrow(airports)
 
   nav_path <- file.path(dirs$nav_dir, "NAV_BASE.csv")
   navaids <- clean_navaids(nav_path)
@@ -226,6 +234,7 @@ run_pipeline <- function(force = FALSE) {
 
   readr::write_csv(navaids, "data/clean/navaids.csv")
   message("Wrote ", nrow(navaids), " navaids to data/clean/navaids.csv")
+  result$navaids_count <- nrow(navaids)
 
   # Remove extra files
   remove_extra_files(dirs$apt_dir, dirs$nav_dir)
@@ -242,7 +251,7 @@ run_pipeline <- function(force = FALSE) {
   push_to_supabase("navaids", navaids_lower)
 
   message("Done! Data updated to ", format(current_date, "%d %b %Y"))
-  invisible(TRUE)
+  result
 }
 
 # --- Main execution (only when run directly) ---
