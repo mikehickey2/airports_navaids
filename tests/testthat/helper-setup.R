@@ -7,6 +7,11 @@ library(tibble)
 library(dplyr)
 library(withr)
 
+# httptest2 for HTTP mocking (optional - tests skip if not available)
+if (requireNamespace("httptest2", quietly = TRUE)) {
+  library(httptest2)
+}
+
 # --- Source R files from project ---
 # Determine project root from test directory
 project_root <- function() {

@@ -131,7 +131,80 @@ test_that("get_supabase_config respects SUPABASE_URL override", {
   expect_equal(config$url, "https://custom.supabase.co")
 })
 
-# Integration tests are skipped without real credentials
-# test_that("push_to_supabase handles HTTP 400 errors", {
-#   # Would require httptest2 mocking
-# })
+# --- HTTP Mocking Tests (httptest2) ---
+
+test_that("push_to_supabase makes correct POST request", {
+  skip_if_not_installed("httptest2")
+  source_project_file("push_to_supabase.R")
+
+  withr::local_envvar(
+    SUPABASE_API_KEY = MOCK_SUPABASE_API_KEY,
+    SUPABASE_URL = MOCK_SUPABASE_URL
+  )
+
+  data <- sample_airports(2)
+
+  # without_internet blocks requests; httptest2 verifies request method and URL
+  httptest2::without_internet({
+    httptest2::expect_POST(
+      push_to_supabase("airports", data),
+      url = paste0(MOCK_SUPABASE_URL, "/rest/v1/airports")
+    )
+  })
+})
+
+test_that("push_to_supabase sends JSON body with data", {
+  skip_if_not_installed("httptest2")
+  source_project_file("push_to_supabase.R")
+
+  withr::local_envvar(
+    SUPABASE_API_KEY = MOCK_SUPABASE_API_KEY,
+    SUPABASE_URL = MOCK_SUPABASE_URL
+  )
+
+  data <- sample_airports(1)
+
+  # Verify request body contains expected field (use regex to match in body)
+  httptest2::without_internet({
+    expect_error(
+      push_to_supabase("airports", data),
+      regexp = '"arpt_id"',
+      fixed = TRUE
+    )
+  })
+})
+
+test_that("clear_table makes correct DELETE request", {
+  skip_if_not_installed("httptest2")
+  source_project_file("push_to_supabase.R")
+
+  withr::local_envvar(
+    SUPABASE_API_KEY = MOCK_SUPABASE_API_KEY,
+    SUPABASE_URL = MOCK_SUPABASE_URL
+  )
+
+  httptest2::without_internet({
+    httptest2::expect_DELETE(
+      clear_table("airports"),
+      url = paste0(MOCK_SUPABASE_URL, "/rest/v1/airports")
+    )
+  })
+})
+
+test_that("clear_table targets correct table in URL", {
+  skip_if_not_installed("httptest2")
+  source_project_file("push_to_supabase.R")
+
+  withr::local_envvar(
+    SUPABASE_API_KEY = MOCK_SUPABASE_API_KEY,
+    SUPABASE_URL = MOCK_SUPABASE_URL
+  )
+
+  # Verify table name appears in URL for navaids table
+  httptest2::without_internet({
+    httptest2::expect_DELETE(
+      clear_table("navaids"),
+      url = paste0(MOCK_SUPABASE_URL, "/rest/v1/navaids")
+    )
+  })
+})
