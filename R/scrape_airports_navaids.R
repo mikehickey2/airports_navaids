@@ -11,7 +11,6 @@
 
 library(dplyr)
 library(readr)
-library(purrr)
 library(stringr)
 library(lubridate)
 library(rvest)
