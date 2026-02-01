@@ -95,7 +95,6 @@ push_to_supabase <- function(table_name, data, batch_size = 500L) {
     resp <- request(paste0(config$url, "/rest/v1/", table_name)) |>
       req_headers(
         "apikey" = config$api_key,
-        "Authorization" = paste("Bearer", config$api_key),
         "Content-Type" = "application/json",
         "Prefer" = "return=minimal"
       ) |>
@@ -145,7 +144,6 @@ clear_table <- function(table_name) {
   resp <- request(paste0(config$url, "/rest/v1/", table_name)) |>
     req_headers(
       "apikey" = config$api_key,
-      "Authorization" = paste("Bearer", config$api_key),
       "Prefer" = "return=minimal"
     ) |>
     req_url_query(`id` = "gte.0") |>
