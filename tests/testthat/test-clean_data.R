@@ -188,9 +188,14 @@ test_that("validate_cleaned_data checks airports have valid ARPT_ID length", {
     ICAO_ID = "KMIA"
   )
 
-  expect_error(
-    validate_cleaned_data(data, "airports"),
-    class = "validation_error"
+  # Wrap in expect_warning to capture the expected "< 5000 airports" warning
+  # that fires before the ARPT_ID length error
+  expect_warning(
+    expect_error(
+      validate_cleaned_data(data, "airports"),
+      class = "validation_error"
+    ),
+    class = "validation_warning"
   )
 })
 
