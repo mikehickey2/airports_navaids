@@ -62,7 +62,8 @@ airports_navaids/
 │   └── create_tables.sql          # PostgreSQL schema for Supabase
 ├── data/
 │   ├── raw/                       # Downloaded FAA CSV files
-│   └── clean/                     # Cleaned CSV outputs
+│   ├── clean/                     # Cleaned CSV outputs
+│   └── pipeline_history.csv       # Historical counts per update
 ├── .Renviron                      # API credentials (gitignored)
 └── .Renviron.example              # Template for credentials
 ```
@@ -130,6 +131,25 @@ The pipeline runs automatically via GitHub Actions.
 GitHub Actions handles notifications natively:
 - Configure in Settings -> Notifications to receive email/mobile alerts on workflow failure
 - Job summary shows airports/navaids counts after successful runs
+
+---
+
+## Pipeline History
+
+Each successful pipeline run logs counts to `data/pipeline_history.csv`:
+
+| Column | Description |
+|--------|-------------|
+| faa_date | FAA subscription effective date |
+| airports | Number of airports |
+| navaids | Number of navaids |
+| run_timestamp | When the pipeline ran |
+
+Analyze trends over time:
+```r
+history <- readr::read_csv("data/pipeline_history.csv")
+plot(history$faa_date, history$navaids, type = "l")
+```
 
 ---
 
