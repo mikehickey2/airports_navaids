@@ -50,6 +50,19 @@ This will:
 
 ---
 
+## Security Model
+
+This project uses Supabase Row Level Security (RLS):
+
+| Key Type | Access | Use Case |
+|----------|--------|----------|
+| `anon` | SELECT only | API consumers querying airports/navaids |
+| `service_role` | Full (bypasses RLS) | Data pipeline (R scripts, GitHub Actions) |
+
+**Important:** The pipeline requires a `service_role` key. Using an `anon` key will fail on INSERT/DELETE operations.
+
+---
+
 ## Project Structure
 
 ```
