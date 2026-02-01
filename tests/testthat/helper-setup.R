@@ -2,6 +2,10 @@
 # Shared fixtures and utilities for testthat tests
 # This file is automatically sourced before tests run
 
+# Explicitly use testthat edition 3
+# Required for: expect_error(..., class = "..."), expect_snapshot(), etc.
+testthat::local_edition(3)
+
 library(testthat)
 library(tibble)
 library(dplyr)
