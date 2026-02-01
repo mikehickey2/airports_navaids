@@ -13,7 +13,6 @@ library(dplyr)
 library(readr)
 library(checkmate)
 library(rlang)
-library(assertr)
 
 # --- Column definitions ---
 # Expected columns for airports table (per docs/data_validation.md)

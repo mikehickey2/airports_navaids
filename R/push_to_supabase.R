@@ -174,7 +174,7 @@ clear_table <- function(table_name) {
 #'
 #' @param row A list representing a single row
 #' @return List with NA values replaced by NULL
-#' @keywords internal
+#' @export
 convert_na_to_null <- function(row) {
   lapply(row, function(x) if (length(x) == 0 || is.na(x)) NULL else x)
 }

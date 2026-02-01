@@ -9,42 +9,6 @@
     ]
   },
   "Packages": {
-    "MASS": {
-      "Package": "MASS",
-      "Version": "7.3-65",
-      "Source": "Repository",
-      "Priority": "recommended",
-      "Date": "2025-02-19",
-      "Revision": "$Rev: 3681 $",
-      "Depends": [
-        "R (>= 4.4.0)",
-        "grDevices",
-        "graphics",
-        "stats",
-        "utils"
-      ],
-      "Imports": [
-        "methods"
-      ],
-      "Suggests": [
-        "lattice",
-        "nlme",
-        "nnet",
-        "survival"
-      ],
-      "Authors@R": "c(person(\"Brian\", \"Ripley\", role = c(\"aut\", \"cre\", \"cph\"), email = \"Brian.Ripley@R-project.org\"), person(\"Bill\", \"Venables\", role = c(\"aut\", \"cph\")), person(c(\"Douglas\", \"M.\"), \"Bates\", role = \"ctb\"), person(\"Kurt\", \"Hornik\", role = \"trl\", comment = \"partial port ca 1998\"), person(\"Albrecht\", \"Gebhardt\", role = \"trl\", comment = \"partial port ca 1998\"), person(\"David\", \"Firth\", role = \"ctb\", comment = \"support functions for polr\"))",
-      "Description": "Functions and datasets to support Venables and Ripley, \"Modern Applied Statistics with S\" (4th edition, 2002).",
-      "Title": "Support Functions and Datasets for Venables and Ripley's MASS",
-      "LazyData": "yes",
-      "ByteCompile": "yes",
-      "License": "GPL-2 | GPL-3",
-      "URL": "http://www.stats.ox.ac.uk/pub/MASS4/",
-      "Contact": "<MASS@stats.ox.ac.uk>",
-      "NeedsCompilation": "yes",
-      "Author": "Brian Ripley [aut, cre, cph], Bill Venables [aut, cph], Douglas M. Bates [ctb], Kurt Hornik [trl] (partial port ca 1998), Albrecht Gebhardt [trl] (partial port ca 1998), David Firth [ctb] (support functions for polr)",
-      "Maintainer": "Brian Ripley <Brian.Ripley@R-project.org>",
-      "Repository": "CRAN"
-    },
     "R6": {
       "Package": "R6",
       "Version": "2.6.1",
@@ -95,46 +59,6 @@
       "Author": "Jeroen Ooms [aut, cre] (<https://orcid.org/0000-0002-4035-0289>)",
       "Maintainer": "Jeroen Ooms <jeroenooms@gmail.com>",
       "Repository": "RSPM"
-    },
-    "assertr": {
-      "Package": "assertr",
-      "Version": "3.0.1",
-      "Source": "Repository",
-      "Type": "Package",
-      "Title": "Assertive Programming for R Analysis Pipelines",
-      "Authors@R": "person(\"Tony\", \"Fischetti\", email=\"tony.fischetti@gmail.com\", role = c(\"aut\", \"cre\"))",
-      "Description": "Provides functionality to assert conditions that have to be met so that errors in data used in analysis pipelines can fail quickly. Similar to 'stopifnot()' but more powerful, friendly, and easier for use in pipelines.",
-      "URL": "https://docs.ropensci.org/assertr/ (website) https://github.com/ropensci/assertr",
-      "BugReports": "https://github.com/ropensci/assertr/issues",
-      "License": "MIT + file LICENSE",
-      "ByteCompile": "TRUE",
-      "Depends": [
-        "R (>= 3.1.0)"
-      ],
-      "Imports": [
-        "dplyr (>= 0.7.0)",
-        "MASS",
-        "methods",
-        "stats",
-        "utils",
-        "rlang (>= 0.3.0)"
-      ],
-      "Suggests": [
-        "knitr",
-        "testthat (>= 3.0.0)",
-        "magrittr",
-        "rmarkdown",
-        "tibble",
-        "covr"
-      ],
-      "VignetteBuilder": "knitr",
-      "RoxygenNote": "7.2.3",
-      "Encoding": "UTF-8",
-      "Config/testthat/edition": "3",
-      "NeedsCompilation": "no",
-      "Author": "Tony Fischetti [aut, cre]",
-      "Maintainer": "Tony Fischetti <tony.fischetti@gmail.com>",
-      "Repository": "CRAN"
     },
     "backports": {
       "Package": "backports",
