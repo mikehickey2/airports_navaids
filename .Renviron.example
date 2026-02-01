@@ -1,5 +1,7 @@
 # Supabase Configuration
-SUPABASE_API_KEY=your_supabase_anon_or_service_role_key_here
+# Pipeline requires service_role key (bypasses RLS for INSERT/DELETE)
+# Get from: Supabase Dashboard > Settings > API > service_role (secret)
+SUPABASE_API_KEY=your_supabase_service_role_key_here
 
 # Notification Settings
 # Set to "true" or "false" to enable/disable each channel
