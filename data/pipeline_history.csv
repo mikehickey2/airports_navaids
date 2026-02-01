@@ -1,1 +1,2 @@
-run_timestamp,status,airports_count,navaids_count,faa_eff_date,next_expected_date,error_message,duration_seconds,triggered_by
+faa_date,airports,navaids,run_timestamp
+2026-01-22,5308,1650,2026-01-31 19:48:32

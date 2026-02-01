@@ -24,6 +24,32 @@ library(rlang)
 faa_nasr_url <- "https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/"
 # nolint end
 faa_download_base <- "https://nfdc.faa.gov/webContent/28DaySub/extra/"
+pipeline_history_file <- "data/pipeline_history.csv"
+
+#' Log pipeline run to history file
+#'
+#' Appends a row to the pipeline history CSV tracking counts over time.
+#'
+#' @param faa_date Date of the FAA subscription
+#' @param airports_count Number of airports
+#' @param navaids_count Number of navaids
+#' @keywords internal
+log_pipeline_history <- function(faa_date, airports_count, navaids_count) {
+  history_row <- data.frame(
+    faa_date = as.character(faa_date),
+    airports = airports_count,
+    navaids = navaids_count,
+    run_timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+  )
+
+  if (file.exists(pipeline_history_file)) {
+    readr::write_csv(history_row, pipeline_history_file, append = TRUE)
+  } else {
+    readr::write_csv(history_row, pipeline_history_file)
+  }
+
+  message("Logged to ", pipeline_history_file)
+}
 
 #' Get the date of local raw data
 #'
@@ -249,6 +275,10 @@ run_pipeline <- function(force = FALSE) {
 
   clear_table("navaids")
   push_to_supabase("navaids", navaids_lower)
+
+  # Log to history file
+
+  log_pipeline_history(current_date, result$airports_count, result$navaids_count)
 
   message("Done! Data updated to ", format(current_date, "%d %b %Y"))
   result
