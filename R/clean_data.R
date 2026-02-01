@@ -14,8 +14,14 @@ library(readr)
 library(checkmate)
 library(rlang)
 
-# --- Column definitions ---
-# Expected columns for airports table (per docs/data_validation.md)
+# --- Schema Definitions ---
+#
+# Airports validation rules:
+#   - ARPT_ID: 1-3 chars (4-char military IDs filtered out)
+#   - Row count: warn if < 5000
+#   - LAT_DECIMAL: warn if outside 18-72 (US bounds)
+#   - LONG_DECIMAL: warn if outside -180 to -64 (US bounds)
+#
 airports_columns <- c(
   "EFF_DATE", "SITE_NO", "SITE_TYPE_CODE", "STATE_CODE", "ARPT_ID",
   "CITY", "COUNTRY_CODE", "STATE_NAME", "COUNTY_NAME", "ARPT_NAME",
@@ -25,13 +31,22 @@ airports_columns <- c(
   "ICAO_ID"
 )
 
-# Expected columns for navaids table (per docs/data_validation.md)
+# Navaids validation rules:
+#   - Row count: warn if < 1000
+#   - NAV_TYPE: warn if not in valid_nav_types
+#
 navaids_columns <- c(
   "EFF_DATE", "NAV_ID", "NAV_TYPE", "STATE_CODE", "CITY",
   "COUNTRY_CODE", "NAME", "STATE_NAME", "REGION_CODE",
   "LAT_HEMIS", "LAT_DEG", "LAT_MIN", "LAT_SEC", "LAT_DECIMAL",
   "LONG_HEMIS", "LONG_DEG", "LONG_MIN", "LONG_SEC", "LONG_DECIMAL",
   "ELEV", "MAG_VARN", "MAG_VARN_HEMIS", "MAG_VARN_YEAR", "ALT_CODE"
+)
+
+# Valid NAV_TYPE values per FAA NAV DATA LAYOUT documentation
+valid_nav_types <- c(
+  "CONSOLAN", "DME", "FAN MARKER", "MARINE NDB", "MARINE NDB/DME",
+  "NDB", "NDB/DME", "TACAN", "UHF/NDB", "VOR", "VOR/DME", "VORTAC", "VOT"
 )
 
 #' Clean airport data from FAA APT_BASE.csv
@@ -193,12 +208,7 @@ validate_cleaned_data <- function(data,
     }
 
     # Check NAV_TYPE values (warning only)
-    # FAA NAV_TYPE values per NAV DATA LAYOUT.pdf
-    valid_types <- c(
-      "CONSOLAN", "DME", "FAN MARKER", "MARINE NDB", "MARINE NDB/DME",
-      "NDB", "NDB/DME", "TACAN", "UHF/NDB", "VOR", "VOR/DME", "VORTAC", "VOT"
-    )
-    invalid_types <- setdiff(unique(data$NAV_TYPE), valid_types)
+    invalid_types <- setdiff(unique(data$NAV_TYPE), valid_nav_types)
     if (length(invalid_types) > 0) {
       rlang::warn(
         c(

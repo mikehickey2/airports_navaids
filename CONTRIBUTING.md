@@ -143,18 +143,64 @@ Approved directories: `R/`, `scripts/`, `tests/`, `sql/`, `data/`, `.claude/`, `
 
 ## Testing Conventions
 
+Tests use **testthat edition 3** (declared in `helper-setup.R`).
+
 ### File Naming
 
 Test files must match source files:
 - `R/clean_data.R` -> `tests/testthat/test-clean_data.R`
 - `R/push_to_supabase.R` -> `tests/testthat/test-push_to_supabase.R`
 
+### Coverage Requirements
+
+Each function needs tests for:
+- Happy path (normal execution)
+- Input validation (type errors, missing args)
+- Edge cases (empty inputs, boundary values)
+- Error conditions (correct error class)
+
 ### Patterns
 
-- Use `on.exit(unlink(tmp, recursive = TRUE), add = TRUE)` for temp file cleanup
-- Use `expect_error(..., class = "error_class")` over pattern matching
-- Use `expect_identical()` for deterministic outputs (hashes, IDs)
-- Source files with `source(here::here("R/file.R"))`
+**Temp file cleanup** - use `withr::local_tempdir()`:
+```r
+test_that("function works", {
+  temp_dir <- withr::local_tempdir()  # Auto-cleaned when test ends
+  # ...
+})
+```
+
+**Error testing** - match on class, not message:
+```r
+expect_error(my_function(bad_input), class = "my_error_class")
+```
+
+**Environment variables** - use `withr::local_envvar()`:
+```r
+withr::local_envvar(SUPABASE_API_KEY = "test_key")
+```
+
+**HTTP mocking** - use httptest2:
+```r
+skip_if_not_installed("httptest2")
+httptest2::without_internet({
+  httptest2::expect_POST(push_to_supabase("airports", data), url = "...")
+})
+```
+
+**Skip conditions** for external resources:
+```r
+skip_on_cran()
+skip_if_offline()
+skip_on_ci()
+```
+
+### Fixtures
+
+Use helpers from `tests/testthat/helper-setup.R`:
+- `sample_airports(n)` - generate test airport tibbles
+- `sample_navaids(n)` - generate test navaid tibbles
+- `create_test_raw_data_dir()` - temp dir with sample FAA CSVs
+- `source_project_file("file.R")` - source from project root
 
 ## Raw Data Handling
 

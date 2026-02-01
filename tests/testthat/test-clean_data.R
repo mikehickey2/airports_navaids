@@ -214,3 +214,50 @@ test_that("find_raw_data_dirs aborts when no APT/NAV dirs found", {
     class = "clean_data_missing_dirs"
   )
 })
+
+test_that("remove_extra_files removes expected files", {
+  temp_dir <- withr::local_tempdir()
+
+  # Create APT and NAV subdirectories
+  apt_dir <- file.path(temp_dir, "APT_CSV")
+  nav_dir <- file.path(temp_dir, "NAV_CSV")
+  dir.create(apt_dir)
+  dir.create(nav_dir)
+
+  # Create the extra files that should be removed
+  apt_extra <- c("APT_ATT.csv", "APT_ARS.csv", "APT_CON.csv")
+  nav_extra <- c("NAV_CKPT.csv", "NAV_RMK.csv")
+
+  for (f in apt_extra) file.create(file.path(apt_dir, f))
+  for (f in nav_extra) file.create(file.path(nav_dir, f))
+
+  # Verify files exist before removal
+  expect_equal(length(list.files(apt_dir)), 3)
+  expect_equal(length(list.files(nav_dir)), 2)
+
+  # Remove extra files
+  result <- remove_extra_files(apt_dir, nav_dir)
+
+  # Should have removed 5 files
+
+  expect_equal(result, 5)
+
+  # Directories should now be empty
+  expect_equal(length(list.files(apt_dir)), 0)
+  expect_equal(length(list.files(nav_dir)), 0)
+})
+
+test_that("remove_extra_files handles missing files gracefully", {
+  temp_dir <- withr::local_tempdir()
+
+  # Create empty APT and NAV subdirectories
+  apt_dir <- file.path(temp_dir, "APT_CSV")
+  nav_dir <- file.path(temp_dir, "NAV_CSV")
+  dir.create(apt_dir)
+  dir.create(nav_dir)
+
+  # No files to remove
+  result <- remove_extra_files(apt_dir, nav_dir)
+
+  expect_equal(result, 0)
+})
