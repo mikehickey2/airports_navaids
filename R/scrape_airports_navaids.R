@@ -189,6 +189,50 @@ delete_old_data <- function(raw_dir = "data/raw") {
   length(old_items)
 }
 
+#' Run data cleaning step of pipeline
+#'
+#' Cleans airports and navaids data from raw directories.
+#'
+#' @param apt_dir Path to APT directory
+#' @param nav_dir Path to NAV directory
+#' @return Named list with airports, navaids, airports_count, navaids_count
+#' @keywords internal
+run_cleaning <- function(apt_dir, nav_dir) {
+  checkmate::assert_directory_exists(apt_dir)
+  checkmate::assert_directory_exists(nav_dir)
+
+  # Clean airports
+  apt_path <- file.path(apt_dir, "APT_BASE.csv")
+  airports <- clean_airports(apt_path)
+  validate_cleaned_data(airports, "airports")
+
+  # Ensure clean directory exists
+  if (!dir.exists("data/clean")) {
+    dir.create("data/clean", recursive = TRUE)
+  }
+
+  readr::write_csv(airports, "data/clean/airports.csv")
+  message("Wrote ", nrow(airports), " airports to data/clean/airports.csv")
+
+  # Clean navaids
+  nav_path <- file.path(nav_dir, "NAV_BASE.csv")
+  navaids <- clean_navaids(nav_path)
+  validate_cleaned_data(navaids, "navaids")
+
+  readr::write_csv(navaids, "data/clean/navaids.csv")
+  message("Wrote ", nrow(navaids), " navaids to data/clean/navaids.csv")
+
+  # Remove extra files
+  remove_extra_files(apt_dir, nav_dir)
+
+  list(
+    airports = airports,
+    navaids = navaids,
+    airports_count = nrow(airports),
+    navaids_count = nrow(navaids)
+  )
+}
+
 #' Run the full FAA data pipeline
 #'
 #' Checks for updates, downloads if newer, cleans data, and pushes to Supabase.
@@ -238,35 +282,15 @@ run_pipeline <- function(force = FALSE) {
   # Run data cleaning
   message("Running data cleaning...")
   dirs <- find_raw_data_dirs("data/raw")
+  cleaning_result <- run_cleaning(dirs$apt_dir, dirs$nav_dir)
 
-  apt_path <- file.path(dirs$apt_dir, "APT_BASE.csv")
-  airports <- clean_airports(apt_path)
-  validate_cleaned_data(airports, "airports")
-
-  # Ensure clean directory exists
-  if (!dir.exists("data/clean")) {
-    dir.create("data/clean", recursive = TRUE)
-  }
-
-  readr::write_csv(airports, "data/clean/airports.csv")
-  message("Wrote ", nrow(airports), " airports to data/clean/airports.csv")
-  result$airports_count <- nrow(airports)
-
-  nav_path <- file.path(dirs$nav_dir, "NAV_BASE.csv")
-  navaids <- clean_navaids(nav_path)
-  validate_cleaned_data(navaids, "navaids")
-
-  readr::write_csv(navaids, "data/clean/navaids.csv")
-  message("Wrote ", nrow(navaids), " navaids to data/clean/navaids.csv")
-  result$navaids_count <- nrow(navaids)
-
-  # Remove extra files
-  remove_extra_files(dirs$apt_dir, dirs$nav_dir)
+  result$airports_count <- cleaning_result$airports_count
+  result$navaids_count <- cleaning_result$navaids_count
 
   # Push to Supabase
   message("Pushing data to Supabase...")
-  airports_lower <- airports |> dplyr::rename_with(tolower)
-  navaids_lower <- navaids |> dplyr::rename_with(tolower)
+  airports_lower <- cleaning_result$airports |> dplyr::rename_with(tolower)
+  navaids_lower <- cleaning_result$navaids |> dplyr::rename_with(tolower)
 
   clear_table("airports")
   push_to_supabase("airports", airports_lower)
