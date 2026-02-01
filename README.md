@@ -3,10 +3,28 @@
 Airports and Navaids on Supabase with API Access
 
 **Status:** Active
-**Version:** 1.1
+**Version:** 1.2
 **Date:** 2026-01-31
 **Author:** Mike
 **Primary Data Source:** [FAA NASR 28-Day Subscription](https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/)
+
+---
+
+## Just Want the Data?
+
+You don't need to clone this repo or set anything up. Query the database directly using the public API key:
+
+```
+Public Key (read-only): sb_publishable_B8oP0zIj3jUD8qX6lTeVOA_8lM_f1-E
+```
+
+```bash
+# Example: Get all California airports
+curl "https://bjmjxipflycjnrwdujxp.supabase.co/rest/v1/airports?state_code=eq.CA" \
+  -H "apikey: sb_publishable_B8oP0zIj3jUD8qX6lTeVOA_8lM_f1-E"
+```
+
+This key is **read-only** - you can query all 5,308 airports and 1,650 navaids but cannot modify data. See [API Access](#api-access) for more examples.
 
 ---
 
@@ -52,14 +70,18 @@ This will:
 
 ## Security Model
 
-This project uses Supabase Row Level Security (RLS):
+This project uses Supabase Row Level Security (RLS) with the new API key format:
 
-| Key Type | Access | Use Case |
-|----------|--------|----------|
-| `anon` | SELECT only | API consumers querying airports/navaids |
-| `service_role` | Full (bypasses RLS) | Data pipeline (R scripts, GitHub Actions) |
+| Key Type | Format | Access | Use Case |
+|----------|--------|--------|----------|
+| **Public** (publishable) | `sb_publishable_...` | READ only | Anyone querying airports/navaids |
+| **Secret** | `sb_secret_...` | Full (bypasses RLS) | Data pipeline (R scripts, GitHub Actions) |
 
-**Important:** The pipeline requires a `service_role` key. Using an `anon` key will fail on INSERT/DELETE operations.
+**Permissions:**
+- Public key: Can only SELECT data (read-only). Safe to share publicly.
+- Secret key: Can INSERT, UPDATE, DELETE. Keep confidential.
+
+**Important:** The pipeline requires a `secret` key. Using a `publishable` key will fail on INSERT/DELETE operations.
 
 ---
 
@@ -85,20 +107,30 @@ airports_navaids/
 
 ## API Access
 
-Query the data via Supabase REST API:
+This database is publicly accessible for read-only queries.
+
+### Public API Key (Read-Only)
+
+```
+sb_publishable_B8oP0zIj3jUD8qX6lTeVOA_8lM_f1-E
+```
+
+This key provides **read-only access** to airports and navaids data. It cannot modify data.
+
+### Example Queries
 
 ```bash
 # Get airports in California
 curl "https://bjmjxipflycjnrwdujxp.supabase.co/rest/v1/airports?state_code=eq.CA" \
-  -H "apikey: YOUR_ANON_KEY"
+  -H "apikey: sb_publishable_B8oP0zIj3jUD8qX6lTeVOA_8lM_f1-E"
 
 # Get VOR navaids
 curl "https://bjmjxipflycjnrwdujxp.supabase.co/rest/v1/navaids?nav_type=eq.VOR" \
-  -H "apikey: YOUR_ANON_KEY"
+  -H "apikey: sb_publishable_B8oP0zIj3jUD8qX6lTeVOA_8lM_f1-E"
 
 # Search airport by identifier
 curl "https://bjmjxipflycjnrwdujxp.supabase.co/rest/v1/airports?arpt_id=eq.LAX" \
-  -H "apikey: YOUR_ANON_KEY"
+  -H "apikey: sb_publishable_B8oP0zIj3jUD8qX6lTeVOA_8lM_f1-E"
 ```
 
 ### From R
@@ -106,10 +138,11 @@ curl "https://bjmjxipflycjnrwdujxp.supabase.co/rest/v1/airports?arpt_id=eq.LAX" 
 ```r
 library(httr2)
 
-api_key <- Sys.getenv("SUPABASE_API_KEY")
+# Public key - safe to hardcode for read-only access
+PUBLIC_KEY <- "sb_publishable_B8oP0zIj3jUD8qX6lTeVOA_8lM_f1-E"
 
 resp <- request("https://bjmjxipflycjnrwdujxp.supabase.co/rest/v1/airports") |>
-  req_headers(apikey = api_key) |>
+  req_headers(apikey = PUBLIC_KEY) |>
   req_url_query(state_code = "eq.CA") |>
   req_perform() |>
   resp_body_json()
@@ -133,7 +166,7 @@ The pipeline runs automatically via GitHub Actions.
 
    | Secret | Description |
    |--------|-------------|
-   | `SUPABASE_API_KEY` | Your Supabase anon or service_role key |
+   | `SUPABASE_API_KEY` | Your Supabase secret key (`sb_secret_...`) |
 
 2. **Enable workflow:**
    - Go to Actions tab -> Enable workflows
