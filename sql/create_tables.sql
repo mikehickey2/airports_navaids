@@ -73,7 +73,6 @@ CREATE POLICY "Allow public read access on airports" ON airports
 CREATE POLICY "Allow public read access on navaids" ON navaids
   FOR SELECT USING (true);
 
--- Write access: service_role key bypasses RLS
--- No explicit INSERT/DELETE policies needed for pipeline
--- The service_role key is used by the data pipeline (R scripts, GitHub Actions)
--- The anon key is used by API consumers (read-only via SELECT policy above)
+-- Write access: secret key (sb_secret_...) bypasses RLS entirely
+-- No INSERT/DELETE policies needed - pipeline uses secret key
+-- Public key (sb_publishable_...) is read-only via SELECT policy above

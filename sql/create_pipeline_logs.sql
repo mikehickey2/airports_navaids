@@ -22,10 +22,6 @@ ALTER TABLE pipeline_logs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow public read" ON pipeline_logs
   FOR SELECT USING (true);
 
--- Allow insert for authenticated/anon users (for automation)
-CREATE POLICY "Allow insert" ON pipeline_logs
-  FOR INSERT WITH CHECK (true);
-
 -- Index for querying by status and date
 CREATE INDEX idx_pipeline_logs_status ON pipeline_logs(status);
 CREATE INDEX idx_pipeline_logs_timestamp ON pipeline_logs(run_timestamp DESC);
