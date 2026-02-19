@@ -162,6 +162,7 @@ The pipeline runs automatically via GitHub Actions.
 2. **Conditional execution** - full pipeline runs only when new data is available
 3. **Results** - written to GitHub Actions job summary (visible in workflow run page)
 4. **README auto-update** - commits updated counts and FAA date back to the repo
+5. **Notifications** - creates a GitHub Issue on pipeline success or failure (push notifications via GitHub Mobile)
 
 ### Setup
 
@@ -177,9 +178,12 @@ The pipeline runs automatically via GitHub Actions.
 
 ### Notifications
 
-GitHub Actions handles notifications natively:
-- Configure in Settings -> Notifications to receive email/mobile alerts on workflow failure
-- Job summary shows airports/navaids counts after successful runs
+Pipeline runs create GitHub Issues automatically:
+- **Success**: Issue labeled `pipeline-run` with airports/navaids counts and FAA date
+- **Failure**: Issue labeled `pipeline-failure` with link to run logs
+
+Push notifications via GitHub Mobile are enabled by default for repo owners.
+Daily check-only runs (no new data) do not create issues. No additional secrets required.
 
 ---
 
