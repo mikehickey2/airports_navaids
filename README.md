@@ -5,7 +5,7 @@ Airports and Navaids on Supabase with API Access
 **Status:** Active  
 **Version:** 1.2.1  
 **Software Date:** 2026-02-18  
-**NASR Database Date:** <!-- pipeline:faa_date -->2026-01-31<!-- /pipeline:faa_date -->  
+**NASR Database Date:** <!-- pipeline:faa_date -->2026-01-22<!-- /pipeline:faa_date -->  
 **Author:** Mike Hickey  
 **Primary Data Source:** [FAA NASR 28-Day Subscription](https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/)  
 

@@ -1,7 +1,12 @@
 # update_readme.R
 # Updates README.md with current pipeline data (counts and FAA date)
 
+library(readr)
 library(checkmate)
+library(rlang)
+
+# Expected marker keys that should be present in README.md
+expected_markers <- c("faa_date", "airports_count", "navaids_count")
 
 #' Update README.md with current pipeline data
 #'
@@ -24,8 +29,7 @@ update_readme <- function(faa_date,
   checkmate::assert_integerish(navaids_count, lower = 0, len = 1)
   checkmate::assert_file_exists(readme_path)
 
-  original_text <- readLines(readme_path, warn = FALSE)
-  content <- paste(original_text, collapse = "\n")
+  original <- readr::read_file(readme_path)
 
   # Build replacements: marker key -> formatted value
   replacements <- list(
@@ -34,6 +38,10 @@ update_readme <- function(faa_date,
     navaids_count = trimws(format(navaids_count, big.mark = ","))
   )
 
+  # Check for missing markers before attempting replacements
+  warn_missing_markers(original)
+
+  updated <- original
   for (key in names(replacements)) {
     pattern <- paste0(
       "<!-- pipeline:", key, " -->",
@@ -45,17 +53,43 @@ update_readme <- function(faa_date,
       replacements[[key]],
       "<!-- /pipeline:", key, " -->"
     )
-    content <- gsub(pattern, replacement, content, perl = TRUE)
+    updated <- gsub(pattern, replacement, updated, perl = TRUE)
   }
 
-  new_text <- strsplit(content, "\n", fixed = TRUE)[[1]]
-
-  if (identical(new_text, original_text)) {
+  if (identical(updated, original)) {
     message("README.md is already up to date")
     return(invisible(FALSE))
   }
 
-  writeLines(new_text, readme_path)
+  readr::write_file(updated, readme_path)
   message("Updated README.md with current pipeline data")
   invisible(TRUE)
+}
+
+#' Warn if expected pipeline markers are missing from content
+#'
+#' @param content Character string of README content
+#' @return Invisible NULL
+#' @keywords internal
+warn_missing_markers <- function(content) {
+  missing <- character(0)
+  for (key in expected_markers) {
+    pattern <- paste0("<!-- pipeline:", key, " -->")
+    if (!grepl(pattern, content, fixed = TRUE)) {
+      missing <- c(missing, key)
+    }
+  }
+
+  if (length(missing) > 0) {
+    rlang::warn(
+      c(
+        "README.md is missing expected pipeline markers",
+        i = paste("Missing:", paste(missing, collapse = ", ")),
+        i = "Markers use format: <!-- pipeline:key -->value<!-- /pipeline:key -->"
+      ),
+      class = "update_readme_missing_markers"
+    )
+  }
+
+  invisible(NULL)
 }
