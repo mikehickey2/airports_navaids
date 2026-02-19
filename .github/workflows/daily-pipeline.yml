@@ -11,6 +11,9 @@ on:
         default: 'false'
         type: boolean
 
+permissions:
+  contents: write
+
 jobs:
   check-and-run:
     runs-on: ubuntu-latest
