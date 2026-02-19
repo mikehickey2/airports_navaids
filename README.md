@@ -4,7 +4,7 @@ Airports and Navaids on Supabase with API Access
 
 **Status:** Active
 **Version:** 1.2
-**Date:** 2026-01-31
+**Date:** <!-- pipeline:faa_date -->2026-01-31<!-- /pipeline:faa_date -->
 **Author:** Mike
 **Primary Data Source:** [FAA NASR 28-Day Subscription](https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/)
 
@@ -24,7 +24,7 @@ curl "https://bjmjxipflycjnrwdujxp.supabase.co/rest/v1/airports?state_code=eq.CA
   -H "apikey: sb_publishable_B8oP0zIj3jUD8qX6lTeVOA_8lM_f1-E"
 ```
 
-This key is **read-only** - you can query all 5,308 airports and 1,650 navaids but cannot modify data. See [API Access](#api-access) for more examples.
+This key is **read-only** - you can query all <!-- pipeline:airports_count -->5,308<!-- /pipeline:airports_count --> airports and <!-- pipeline:navaids_count -->1,650<!-- /pipeline:navaids_count --> navaids but cannot modify data. See [API Access](#api-access) for more examples.
 
 ---
 
@@ -33,8 +33,8 @@ This key is **read-only** - you can query all 5,308 airports and 1,650 navaids b
 This project provides a reusable backend platform that ingests publicly available FAA aeronautical reference data (airports and navaids), stores it in a Supabase-hosted Postgres database, and exposes it via a REST API. The platform supports multiple downstream projects requiring authoritative lookup of identifiers and coordinates.
 
 **Current Data:**
-- 5,308 airports
-- 1,650 navaids
+- <!-- pipeline:airports_count -->5,308<!-- /pipeline:airports_count --> airports
+- <!-- pipeline:navaids_count -->1,650<!-- /pipeline:navaids_count --> navaids
 
 ---
 
@@ -92,7 +92,8 @@ airports_navaids/
 ├── R/
 │   ├── scrape_airports_navaids.R  # Main pipeline - orchestrates everything
 │   ├── clean_data.R               # Filters and cleans raw FAA CSV data
-│   └── push_to_supabase.R         # Pushes to Supabase via REST API
+│   ├── push_to_supabase.R         # Pushes to Supabase via REST API
+│   └── update_readme.R            # Updates README with pipeline results
 ├── sql/
 │   └── create_tables.sql          # PostgreSQL schema for Supabase
 ├── data/
@@ -159,6 +160,7 @@ The pipeline runs automatically via GitHub Actions.
 1. **Daily check** at 12:00 UTC - scrapes FAA website for current subscription date
 2. **Conditional execution** - full pipeline runs only when new data is available
 3. **Results** - written to GitHub Actions job summary (visible in workflow run page)
+4. **README auto-update** - commits updated counts and FAA date back to the repo
 
 ### Setup
 

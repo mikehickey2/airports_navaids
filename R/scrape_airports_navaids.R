@@ -278,6 +278,7 @@ run_pipeline <- function(force = FALSE) {
   # Source the cleaning and push scripts (functions only, no execution)
   source("R/clean_data.R", local = FALSE)
   source("R/push_to_supabase.R", local = FALSE)
+  source("R/update_readme.R", local = FALSE)
 
   # Run data cleaning
   message("Running data cleaning...")
@@ -301,6 +302,9 @@ run_pipeline <- function(force = FALSE) {
   # Log to history file
 
   log_pipeline_history(current_date, result$airports_count, result$navaids_count)
+
+  # Update README with current data
+  update_readme(current_date, result$airports_count, result$navaids_count)
 
   message("Done! Data updated to ", format(current_date, "%d %b %Y"))
   result
