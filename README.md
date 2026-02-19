@@ -5,7 +5,7 @@ Airports and Navaids on Supabase with API Access
 **Status:** Active  
 **Version:** 1.2.1  
 **Software Date:** 2026-02-18  
-**NASR Database Date:** <!-- pipeline:faa_date -->2026-01-22<!-- /pipeline:faa_date -->  
+**NASR Database Date:** <!-- pipeline:faa_date -->2026-02-19<!-- /pipeline:faa_date -->  
 **Author:** Mike Hickey  
 **Primary Data Source:** [FAA NASR 28-Day Subscription](https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/)  
 
@@ -25,7 +25,7 @@ curl "https://bjmjxipflycjnrwdujxp.supabase.co/rest/v1/airports?state_code=eq.CA
   -H "apikey: sb_publishable_B8oP0zIj3jUD8qX6lTeVOA_8lM_f1-E"
 ```
 
-This key is **read-only** - you can query all <!-- pipeline:airports_count -->5,308<!-- /pipeline:airports_count --> airports and <!-- pipeline:navaids_count -->1,650<!-- /pipeline:navaids_count --> navaids but cannot modify data. See [API Access](#api-access) for more examples.
+This key is **read-only** - you can query all <!-- pipeline:airports_count -->5,309<!-- /pipeline:airports_count --> airports and <!-- pipeline:navaids_count -->1,649<!-- /pipeline:navaids_count --> navaids but cannot modify data. See [API Access](#api-access) for more examples.
 
 ---
 
@@ -34,8 +34,8 @@ This key is **read-only** - you can query all <!-- pipeline:airports_count -->5,
 This project provides a reusable backend platform that ingests publicly available FAA aeronautical reference data (airports and navaids), stores it in a Supabase-hosted Postgres database, and exposes it via a REST API. The platform supports multiple downstream projects requiring authoritative lookup of identifiers and coordinates.
 
 **Current Data:**
-- <!-- pipeline:airports_count -->5,308<!-- /pipeline:airports_count --> airports
-- <!-- pipeline:navaids_count -->1,650<!-- /pipeline:navaids_count --> navaids
+- <!-- pipeline:airports_count -->5,309<!-- /pipeline:airports_count --> airports
+- <!-- pipeline:navaids_count -->1,649<!-- /pipeline:navaids_count --> navaids
 
 ---
 
