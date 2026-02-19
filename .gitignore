@@ -2,6 +2,7 @@
 .Renviron
 .claude/
 .mcp.json
+.vscode/
 supabase/
 temp/
 
